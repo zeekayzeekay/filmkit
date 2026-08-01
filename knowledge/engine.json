@@ -1,9 +1,102 @@
 {
-  "_what": "LAYER 1 \u2014 facts about Higgsfield/Seedance itself, true whatever you are filming. This is the ONLY layer that expires. Re-verify against the live API, do not trust age.",
-  "_verified_on": null,
+  "_what": "LAYER 1 — facts about Higgsfield itself, true whatever you are filming. This is the ONLY layer that expires. Re-verify against the live catalogue; do not trust age.",
+  "_verified_on": "2026-08-01",
+  "_verified_how": "models_explore action=get for each model id, plus action=search for discovery. Read-only calls, no credits. NOT read from memory, and NOT copied from a project's own notes — a project's notes are as old as the day somebody wrote them.",
   "_expires_after_days": 45,
-  "_why_expiry": "A film script in this kit's own origin project carried the line '13s is not a length the model offers' long after the API reported 4-15s. It was false and it was never re-checked, because nothing made it expire.",
-  "seedance": {},
-  "models": {},
-  "capability_limits": {}
+  "_why_expiry": "The origin project's shot script carried the line 'thirteen seconds is not a length the model offers' for days after it stopped being true. Nothing made it expire, so nothing made anybody look. A layer whose facts come from someone else's API needs a date on it or it becomes folklore.",
+
+  "_near_miss_worth_keeping": "A semantic search for 'nano banana pro' returned FLUX.2 and Seedream 5.0 Pro and NOT the model itself, and the first conclusion drawn was that it had been retired — which would have been written in here as a fact. `action=get model_id=nano_banana_pro` returns it, alive. ABSENCE FROM A SEARCH IS NOT ABSENCE FROM THE CATALOGUE. Confirm a model is gone by asking for it by id, never by failing to find it.",
+
+  "video": {
+    "seedance_2_0": {
+      "name": "Seedance 2.0",
+      "provider": "Bytedance",
+      "duration_seconds": {"min": 4, "max": 15, "default": 5},
+      "resolution": {
+        "options": ["480p", "720p", "1080p", "4k"],
+        "default": "720p",
+        "constraint": "4k and 1080p require mode='std'. mode='fast' supports 480p and 720p ONLY."
+      },
+      "mode": {"options": ["std", "fast"], "default": "std"},
+      "bitrate_mode": {"options": ["standard", "high"], "default": "standard"},
+      "genre": {"options": ["auto", "action", "horror", "comedy", "noir", "drama", "epic"], "default": "auto"},
+      "generate_audio": {
+        "type": "bool",
+        "default": true,
+        "WATCH": "DEFAULT IS TRUE. A film that scores and mixes its own audio must pass generate_audio=false explicitly, or every clip arrives carrying native audio nobody asked for. Independent of audio_references."
+      },
+      "medias_roles": ["start_image", "end_image", "image_references", "video_references", "audio_references"],
+      "aspect_ratios": ["auto", "16:9", "9:16", "4:3", "3:4", "1:1", "21:9"],
+      "supports_unlim": true
+    },
+    "seedance_2_0_mini": {
+      "name": "Seedance 2.0 Mini",
+      "provider": "Bytedance",
+      "duration_seconds": {"min": 4, "max": 15, "default": 5},
+      "resolution": {"options": ["480p", "720p"], "default": "720p"},
+      "bitrate_mode": {"options": ["standard", "high"], "default": "standard"},
+      "genre": {"options": ["auto", "action", "horror", "comedy", "noir", "drama", "epic"], "default": "auto"},
+      "generate_audio": {"type": "bool", "default": true},
+      "medias_roles": ["start_image", "end_image", "image_references", "video_references", "audio_references"],
+      "aspect_ratios": ["auto", "16:9", "9:16", "4:3", "3:4", "1:1", "21:9"],
+      "supports_unlim": true,
+      "note": "Same duration range and the same five media roles as the full model, at 480p/720p. A cheaper way to test blocking and timing before spending on a 720p std draft."
+    },
+    "minimax_h3": {
+      "name": "MiniMax H3",
+      "duration_seconds": {"min": 5, "max": 15, "default": 5},
+      "resolution": {"options": ["2K"], "default": "2K"},
+      "medias_roles": ["start_image", "end_image", "image_references", "video_references", "audio_references"],
+      "note": "Recorded only because it also takes start and end frames. Not evaluated for this method."
+    }
+  },
+
+  "image": {
+    "nano_banana_pro": {
+      "name": "Nano Banana Pro",
+      "provider": "Google",
+      "resolution": {"options": ["1k", "2k", "4k"], "default": "1k"},
+      "medias_roles": ["image"],
+      "aspect_ratios": ["1:1", "3:2", "2:3", "4:3", "3:4", "4:5", "5:4", "9:16", "16:9", "21:9"],
+      "supports_unlim": true,
+      "note": "One role, `image`, used for both text-to-image (omit it) and image-to-image (pass a job id or media id). 4k is available; the origin project's notes record only 1k and 2k."
+    },
+    "gpt_image_2": {
+      "name": "GPT Image 2",
+      "resolution": {"options": ["1k", "2k", "4k"], "default": "1k"},
+      "quality": {"options": ["low", "medium", "high"], "default": "low"},
+      "medias_roles": ["image"],
+      "supports_unlim": true
+    },
+    "seedream_v4_5": {
+      "name": "Seedream 4.5",
+      "quality": {"options": ["basic", "high"], "default": "basic", "note": "basic renders up to 4K, high up to ~6K"},
+      "medias_roles": ["image_references"],
+      "supports_unlim": true
+    },
+    "seedream_v5_pro": {
+      "name": "Seedream 5.0 Pro",
+      "resolution": {"options": ["1k", "1.5k", "2k"], "default": "2k"},
+      "medias_roles": ["image_references"],
+      "supports_unlim": true,
+      "note": "Instruction-based editing and visual reasoning. Worth testing against nano_banana_pro for derived-angle edits — that is a capability comparison nobody has run."
+    },
+    "flux_kontext": {"name": "Flux Kontext", "medias_roles": ["image_references"], "note": "context-aware editing and style transfer"},
+    "openai_hazel": {"name": "OpenAI Hazel", "quality": {"options": ["low", "medium", "high"], "default": "medium"}, "medias_roles": ["image_references"]}
+  },
+
+  "capability_limits": {
+    "elements_are_global": "An element conditions EVERY frame of a generation, not a span of it. Two states of one room cannot both be attached; the second appears in frame 1 and destroys the reveal.",
+    "an_element_carries_a_composition": "A location element supplies the AXIS its own plate was shot on, not just its materials. Ask for a camera rotated off that axis and the model drops either the room or the subject.",
+    "no_novel_view_synthesis": "These models do not rotate a scene. Image-to-image is an in-place edit engine: it will change what is in a frame and it will not re-photograph that frame from somewhere else. A new angle must be re-photographed by prose, or the shot must change.",
+    "a_prohibition_summons": "A negation is a description with a minus sign in front, and the minus sign is the least reliable token in it. Enumerate what a surface DOES carry, and close the list.",
+    "_where_these_came_from": "Measured on the origin project across dozens of generations, not read from documentation. They are capability claims rather than API facts, so they do not expire on the same clock — but they are model behaviour, and model behaviour changes when a model does."
+  },
+
+  "not_verified": {
+    "credit_rates": "models_explore does not expose pricing. The origin project's measured rates are in ITS facts file and are as old as the day they were measured. Re-derive from `transactions` after a real generation; never quote a price out of a project's notes as though it were an API fact.",
+    "unlim_allowance": "`unlim.available` read FALSE on 2026-08-01 for this account. That is an account state, not a model fact, and it changes.",
+    "whether_all_five_media_roles_work_together": "Five roles are declared on Seedance. Nobody has tested passing all five in one call.",
+    "the_genre_and_bitrate_parameters": "`genre` and `bitrate_mode` exist and the origin project has never used either. Unknown whether genre helps or fights a carefully written prompt."
+  }
 }

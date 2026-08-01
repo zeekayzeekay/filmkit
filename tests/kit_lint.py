@@ -214,6 +214,33 @@ for name in _DOCS:
                          f"the line (PLANNED — FKn).")
 
 
+# ---------------------------------------------------------------------------
+# 10. LAYER 1 EXPIRES. knowledge/engine.json carries a _verified_on date and an
+#     _expires_after_days, and a date nothing reads is a decoration. The origin
+#     project's script carried a false duration claim for days because nothing
+#     made it expire, so nothing made anybody look.
+# ---------------------------------------------------------------------------
+_eng = KIT / "knowledge" / "engine.json"
+if _eng.exists():
+    import datetime as _dt
+    e = _json.loads(_eng.read_text(encoding="utf-8"))
+    on, days = e.get("_verified_on"), e.get("_expires_after_days")
+    if not on:
+        fail("engine-facts-unverified", "knowledge/engine.json",
+             "_verified_on is null. These are somebody else's API facts; undated, they are "
+             "folklore.")
+    else:
+        try:
+            age = (_dt.date.today() - _dt.date.fromisoformat(on)).days
+            if days and age > days:
+                fail("engine-facts-stale", "knowledge/engine.json",
+                     f"verified {age} days ago, limit {days}. Re-run models_explore and "
+                     f"update it — a model's parameters are not a thing to remember.")
+        except ValueError:
+            fail("engine-facts-unverified", "knowledge/engine.json",
+                 f"_verified_on {on!r} is not an ISO date.")
+
+
 def main():
     tools = sorted(p.name for p in TOOLS.glob("*.py"))
     print(f"\n  kit lint — {len(tools)} tools\n")
@@ -223,7 +250,8 @@ def main():
         print("           hard-coded project nouns in code · unused or missing _project")
         print("           import · unknown document roles · manifest paths present AND")
         print("           tracked · no empty directories · no env var in a hook")
-        print("           registration · kit docs name no missing file.\n")
+        print("           registration · kit docs name no missing file · engine facts")
+        print("           still inside their expiry.\n")
         print("  NOT checked: whether a rule is CORRECT, whether a threshold is right for")
         print("  your film, or whether a tool does what its docstring claims.\n")
         return 0
