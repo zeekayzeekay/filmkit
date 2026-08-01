@@ -357,3 +357,53 @@ been caught by that sentence, and none of them was caught by intending to be car
 invoke the hook, or whether the operator has trusted it. It also runs only when someone types
 it — there is no CI here. It is one command instead of five habits, which is progress, not a
 guarantee.
+
+---
+
+## FK-07 · THE PROVENANCE CLAIM WAS ITSELF UNVERIFIED
+
+<!-- guard: manual  scope: process
+     ask: does the "how this was checked" line describe what was actually done, for every row — or for the rows I happened to check? -->
+
+**Cost:** caught in review, in the same session. Nothing downstream had used it yet.
+
+`knowledge/engine.json` is the layer that expires, so it carries a `_verified_how` line saying
+how its facts were established. The first version said:
+
+> *models_explore action=get for each model id, plus action=search for discovery.*
+
+**Two of the nine had been fetched by id.** The other seven — `seedance_2_0_mini`,
+`minimax_h3`, `gpt_image_2`, `seedream_v4_5`, `seedream_v5_pro`, `flux_kontext`,
+`openai_hazel` — were copied out of a search listing, which is a summary the server chose to
+return, not a record of the model.
+
+**A false provenance claim is worse than no provenance claim**, because the next person
+reading it stops checking. And this is the file whose entire reason for existing is that facts
+from someone else's API go stale without anyone noticing. Writing an unverified line into it
+is the failure the file was built to prevent, performed on the file itself.
+
+**Doing it properly changed the contents**, which is the argument for doing it at all. Seven
+`get` calls returned fields the search listing had not:
+
+- `minimax_h3` has a `folder_id` parameter no other model here has
+- three models — `minimax_h3`, `flux_kontext`, `openai_hazel` — carry **no** `supports_unlim`,
+  where the other six carry `true`. Recorded now as an explicit `false`, because a missing key
+  and a false value read the same to a person skimming and differently to anything that checks.
+- aspect-ratio lists were absent for four models
+
+**Fix.** Every model row carries its own `verified: "models_explore action=get, <date>"`. The
+claim is now per-row and true, rather than one sentence covering rows it did not cover.
+
+**Second correction in the same pass.** `_expires_after_days: 45` was a number with nothing
+behind it, in a kit whose own portability document says *re-derive every threshold from your
+own material; a budget calibrated on someone else's drafts is a number with no reason behind
+it*. It is now labelled as a guess, with what would replace it: an observed rate, once there
+are two dated versions of this file to compare.
+
+**The transferable rule.** *A provenance line describes rows. Write it per row, or it will
+describe the rows you happened to check.* Same shape as F-68 — a lineage field that records one
+step reads as though it recorded the chain.
+
+**What is not encoded:** nothing verifies that a `verified:` line is true. It is a signed
+statement, like F-68's exemption and F-72's `is_master`, and its value is that the signature
+is now per-row and dated rather than one confident sentence at the top.
