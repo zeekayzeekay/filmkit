@@ -1,0 +1,14 @@
+{
+  "name": "filmkit",
+  "version": "0.1.0",
+  "description": "Guard kit and craft method for making short films with Higgsfield/Seedance. Enforces that no generation fires without a green preflight.",
+  "author": "Zeeshan Khan",
+  "license": "UNLICENSED",
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json",
+  "interface": {
+    "displayName": "Filmkit",
+    "shortDescription": "Preflight-gated film production kit for Higgsfield/Seedance",
+    "category": "creative"
+  }
+}

@@ -1,0 +1,3 @@
+#!/usr/bin/env python3
+"""filmkit-doctor — implemented in FK7 (init, doctor) / FK6 (promote)."""
+raise SystemExit("not implemented yet")

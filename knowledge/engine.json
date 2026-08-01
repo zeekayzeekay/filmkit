@@ -1,0 +1,9 @@
+{
+  "_what": "LAYER 1 \u2014 facts about Higgsfield/Seedance itself, true whatever you are filming. This is the ONLY layer that expires. Re-verify against the live API, do not trust age.",
+  "_verified_on": null,
+  "_expires_after_days": 45,
+  "_why_expiry": "A film script in this kit's own origin project carried the line '13s is not a length the model offers' long after the API reported 4-15s. It was false and it was never re-checked, because nothing made it expire.",
+  "seedance": {},
+  "models": {},
+  "capability_limits": {}
+}

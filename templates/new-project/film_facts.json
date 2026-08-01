@@ -1,0 +1,16 @@
+{
+  "_README": "Machine-readable project facts. Every tool in the kit reads this and nothing else about your film. Point tools at it with FILMKIT_PROJECT=film_facts.json.",
+  "kit_version": "0.1.0",
+  "look_pack": null,
+  "_fact_rev": 0,
+  "vocabulary": {},
+  "geometry": {},
+  "continuity": {},
+  "colour_continuity": {},
+  "conditioning_frames": {},
+  "element_rules": {},
+  "assets": {},
+  "shot_requirements": {},
+  "selections": {},
+  "tripwires": []
+}
