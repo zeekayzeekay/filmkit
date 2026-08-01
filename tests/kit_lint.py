@@ -112,6 +112,64 @@ for f in sorted(TOOLS.glob("*.py")):
                  f"asks for document role {m.group(1)!r}, which _project does not define.")
 
 
+# ---------------------------------------------------------------------------
+# 6. Every path a plugin manifest references must EXIST AND BE TRACKED BY GIT.
+#    The first scaffold created ten directories, left them empty, and committed.
+#    Git does not track empty directories, so a clone arrived with no skills/ at
+#    all while both manifests pointed at "./skills/". I verified the files I had
+#    written and never verified the thing that has to ARRIVE.
+# ---------------------------------------------------------------------------
+import json as _json, subprocess as _sp
+
+_tracked = set(_sp.run(["git", "ls-files"], capture_output=True, text=True,
+                       cwd=KIT).stdout.split())
+
+for man in (KIT / ".claude-plugin" / "plugin.json", KIT / ".codex-plugin" / "plugin.json"):
+    if not man.exists():
+        fail("missing-manifest", man.name, "plugin manifest absent")
+        continue
+    d = _json.loads(man.read_text(encoding="utf-8"))
+    for key, val in d.items():
+        if not isinstance(val, str) or not val.startswith("./"):
+            continue
+        rel = val.lstrip("./").rstrip("/")
+        if not (KIT / rel).exists():
+            fail("manifest-path-missing", f"{man.parent.name}/{man.name}",
+                 f"{key!r} points at {val!r}, which does not exist.")
+        elif not any(x == rel or x.startswith(rel + "/") for x in _tracked):
+            fail("manifest-path-untracked", f"{man.parent.name}/{man.name}",
+                 f"{key!r} points at {val!r}, which exists here but is NOT IN GIT. "
+                 f"A clone will not have it.")
+
+# ---------------------------------------------------------------------------
+# 7. No directory is empty of tracked files. An empty directory is a directory
+#    that does not survive a clone.
+# ---------------------------------------------------------------------------
+for d in sorted(x for x in KIT.rglob("*") if x.is_dir()):
+    rel = d.relative_to(KIT).as_posix()
+    if rel.startswith(".git") or "__pycache__" in rel:
+        continue
+    if not any(x.startswith(rel + "/") for x in _tracked):
+        fail("untracked-directory", rel,
+             "no tracked file inside; git does not track empty directories, so this "
+             "will not survive a clone. Put a README in it or delete it.")
+
+# ---------------------------------------------------------------------------
+# 8. A shipped hook registration must not interpolate an environment variable.
+#    The first scaffold guessed $CODEX_PLUGIN_ROOT. A hook command that fails to
+#    expand does not block the call -- per both hosts' exit-code semantics it is
+#    a hook FAILURE and processing continues -- so the guess produced a spend
+#    gate that silently was not one. Registrations are GENERATED with absolute
+#    paths by filmkit-doctor.
+# ---------------------------------------------------------------------------
+for h in sorted((KIT / "hooks").rglob("*.json")):
+    src = h.read_text(encoding="utf-8")
+    if "$" in src and "__GATE_PATH__" not in src:
+        fail("env-var-in-hook", h.relative_to(KIT).as_posix(),
+             "interpolates an environment variable. Registrations are generated with "
+             "absolute paths; a variable that does not expand fails OPEN.")
+
+
 def main():
     tools = sorted(p.name for p in TOOLS.glob("*.py"))
     print(f"\n  kit lint — {len(tools)} tools\n")
@@ -119,7 +177,9 @@ def main():
         print("  \033[92mNo faults of any known class.\033[0m")
         print("  Checked: bare sibling invocation · tool source read from the film ·")
         print("           hard-coded project nouns in code · unused or missing _project")
-        print("           import · unknown document roles.\n")
+        print("           import · unknown document roles · manifest paths present AND")
+        print("           tracked · no empty directories · no env var in a hook")
+        print("           registration.\n")
         print("  NOT checked: whether a rule is CORRECT, whether a threshold is right for")
         print("  your film, or whether a tool does what its docstring claims.\n")
         return 0

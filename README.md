@@ -9,13 +9,13 @@ running identically under Claude Code and OpenAI Codex.
 
 ```
 git clone <your-remote> filmkit
-python3 bin/filmkit-doctor          # tells you exactly what is not wired yet
+python3 filmkit/bin/filmkit-doctor          # tells you exactly what is not wired yet
 ```
 
 ## Start a film
 
 ```
-python3 bin/filmkit-init ../myfilm
+python3 filmkit/bin/filmkit-init ../myfilm
 ```
 
 ## The rule underneath all of it

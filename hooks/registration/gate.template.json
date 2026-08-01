@@ -1,12 +1,13 @@
 {
+  "_generated_by": "filmkit-doctor --install \u2014 do not hand-edit; __GATE_PATH__ is a placeholder",
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "mcp__higgsfield__(generate|upscale|outpaint|reframe|motion_control|remove_background).*",
+        "matcher": "mcp__higgsfield__.*",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CODEX_PLUGIN_ROOT/hooks/gate.py\"",
+            "command": "python3 \"__GATE_PATH__/gate.py\"",
             "timeout": 30,
             "statusMessage": "filmkit: checking preflight receipt"
           }
@@ -19,7 +20,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CODEX_PLUGIN_ROOT/hooks/session_start.py\"",
+            "command": "python3 \"__GATE_PATH__/session_start.py\"",
             "timeout": 30,
             "statusMessage": "filmkit: loading project state"
           }

@@ -13,11 +13,15 @@ tempted to skip.
 4. **Every prompt change is checked against the previous shot, the next shot, and the script.**
 5. **Not every mismatch is a fault.** Consult the tolerance table before calling anything drift.
 
+**`$FILMKIT` is where the kit is cloned; you run these from the FILM's directory.**
+The tools no longer live beside the film — that was true in the origin project and it is
+the assumption that broke twelve call sites during extraction.
+
 ## Before you write a prompt
 
 ```
-python3 tools/shotmap.py            # what does this shot need, and what supplies it?
-python3 tools/verify_asset.py --audit   # is anything unverified, or LOCKED?
+python3 $FILMKIT/tools/shotmap.py            # what does this shot need, and what supplies it?
+python3 $FILMKIT/tools/verify_asset.py --audit   # is anything unverified, or LOCKED?
 ```
 
 A shot photographed on an axis no attached plate covers is a shot arguing with its own
@@ -26,7 +30,7 @@ reference. Build the plate first — **derived from the master, never fresh from
 ## Before anything fires
 
 ```
-python3 tools/preflight.py --block "<BLOCK>" --record RUN.md --export OUT.txt
+python3 $FILMKIT/tools/preflight.py --block "<BLOCK>" --record RUN.md --export OUT.txt
 ```
 
 No partial pass. Any phase failing means do not fire. A receipt is written on green, and
@@ -42,7 +46,7 @@ with a written question. Never leave it as a paragraph.
 If the lesson is general rather than about this film:
 
 ```
-python3 bin/filmkit-promote FINDING-ID
+python3 $FILMKIT/bin/filmkit-promote FINDING-ID
 ```
 
 which runs the portability test, demands a neutral fixture, and moves it into the kit.

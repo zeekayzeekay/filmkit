@@ -136,3 +136,64 @@ definition.* The definition is where the change is visible and the uses are wher
 **What is not encoded:** the lint checks structure, not meaning. It cannot tell whether a rule
 is correct, whether a threshold suits your film, or whether a tool does what its docstring
 claims. And it only knows the five classes that have already bitten.
+
+---
+
+## FK-03 · I VERIFIED WHAT I BUILT, NOT WHAT ARRIVES
+
+<!-- guard: automatic  scope: process
+     ask: has the DELIVERABLE been opened, or only the working copy it was made from? -->
+
+**Cost:** two bundles delivered to the operator, both structurally broken. Found only because
+he asked whether FK0 had been audited too — it had not.
+
+The scaffold created seventeen directories and printed a file listing that looked complete.
+**Ten of those directories were empty, and git does not track empty directories.** A
+`git clone` of the delivered bundle arrives with **no `skills/` directory at all**, while both
+plugin manifests point at `./skills/`. Neither plugin would load a single skill.
+
+I never cloned the bundle. The bundle **is** the deliverable — the container is ephemeral and
+that file is the only durable artifact — and I checked the working copy it was made from.
+
+> **A working copy is not a deliverable. Open the thing you are handing over.**
+
+Three more defects in the same scaffold, none caught at the time:
+
+**The hook variable was a guess.** The Codex registration interpolated `$CODEX_PLUGIN_ROOT`.
+The research that established Codex's hook format confirmed the events, the wire format, the
+matchers and the exit codes, and **explicitly did not confirm a plugin-root variable name.**
+I wrote a plausible one into the enforcement path. Per both hosts' documented semantics, a hook
+command that fails for any reason other than exit 2 is a *hook failure and processing
+continues* — so an unexpandable variable produces **a spend gate that silently is not a gate**.
+Registrations are now GENERATED with absolute paths by `filmkit-doctor --install`; the
+guess is gone rather than corrected.
+
+**One registration was planted at the other host's front door.** `hooks/hooks.json` is the
+conventional auto-discovery path for a plugin's hooks in *both* hosts. Shipping the Codex file
+there meant Claude Code would likely load it too, Codex variable and all.
+
+**The matcher was an allow-list of dangers.**
+`generate|upscale|outpaint|reframe|motion_control|remove_background` — which misses
+`generate_3d`, `dubbing`, `voice_change`, `create_voice`, `explainer_video`,
+`shorts_studio_create`, `personal_clipper_create`, `video_analysis_create` and `apps_invoke`,
+several of which spend credits, and would miss anything Higgsfield ships next month. **F-56
+established that a guard whose reach is an allow-list only ever guards what has already gone
+wrong once**, and I wrote one anyway, in the gate whose entire job is to stop spending.
+
+It is now `mcp__higgsfield__.*` — deny by default — with `gate.py` allowing read-only calls by
+name. A new spending tool is gated the day it appears; a new read-only tool costs one line
+whose worst failure is a needless prompt.
+
+**And `AGENTS.md` — the file the model reads every session — told the reader to run
+`python3 tools/shotmap.py` from the film directory**, where `tools/` is not. The same
+assumption that broke twelve call sites, restated as instruction.
+
+**Guard.** Three checks added to `tests/kit_lint.py`:
+
+1. `manifest-path-missing` / `manifest-path-untracked` — every path a manifest names must exist **and be in git**
+2. `untracked-directory` — no directory without a tracked file inside it
+3. `env-var-in-hook` — a shipped registration may not interpolate an environment variable
+
+**What is not encoded:** nothing clones the bundle and runs the suite from the clone. That is
+the real test and it is still a manual step — `tests/dual_run.py` (FK5) will do it from a
+fresh clone rather than from the working copy, which is the only way this class stays dead.
