@@ -5,7 +5,7 @@
 | FK0 | repo skeleton, both manifests, AGENTS.md | **done** |
 | FK1 | extract and de-TARN the fourteen guards | **done** |
 | FK2 | portability test, split the 74 findings | **test done**, split pending |
-| FK3 | gate.py + self-gating tools | pending |
+| FK3 | gate.py + self-gating tools | **done** |
 | FK4 | engine.json, craft skills, look packs | pending |
 | FK5 | dual-run against TARN | pending |
 | FK6 | promotion ritual, session state | pending |
@@ -61,10 +61,27 @@ cannot disagree with the ledger.
 
 kit_lint gains check 9: the kit's own documents may not name a file that is not there.
 `staleness.py` does this for a FILM and nothing did it for the kit — `ARCHITECTURE.md`
-went on describing `settings/claude.settings.json` for two commits after that file was
+went on describing `settings/claude.settings.json` (REMOVED in the FK0 audit — registrations are generated) for two commits after that file was
 deleted in the FK0 audit. A design record documenting a layout the repo does not have is
 worse than none, because it is read as authority. Paths not built yet are marked (PLANNED).
 
 `preflight --record --export` exercised for the first time and found FK-04: the export
 was verified before it was written, so the documented command crashed on any clean
 directory. Byte-identical to the origin — inherited, not introduced.
+
+## FK3
+
+`tools/_receipt.py` owns the hash, and both `preflight` and `gate` import it — one
+artefact, one hash, which is `check_fullread`'s own rule applied to a second artefact.
+
+A receipt is written ONLY on an all-green run **including the manual items**, so the
+thing that authorises a fire is a run a person signed. Verified in both directions: a
+not-all-green run writes nothing and says a generation will be refused.
+
+`hooks/gate.py` is deny-by-default across the whole Higgsfield surface, with free calls
+named individually. 15 selftest cases, four of which the first matcher got wrong
+(`generate_3d`, `dubbing`, `apps_invoke`, and any tool shipped after it was written).
+It fails CLOSED on an unreadable payload.
+
+kit_lint now covers `hooks/` — gate.py was the one file in the repo whose correctness
+costs money and it was outside every check.

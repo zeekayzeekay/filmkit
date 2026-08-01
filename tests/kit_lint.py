@@ -28,6 +28,12 @@ import ast, pathlib, re, sys
 
 KIT = pathlib.Path(__file__).resolve().parent.parent
 TOOLS = KIT / "tools"
+
+
+def scripts():
+    """Everything executable in the kit. hooks/gate.py was outside the first
+    five checks entirely -- the one file whose correctness costs money."""
+    return sorted(TOOLS.glob("*.py")) + sorted((KIT / "hooks").glob("*.py"))
 FAIL = []
 
 
@@ -40,7 +46,7 @@ def fail(rule, where, msg):
 #    Twelve of these shipped.
 # ---------------------------------------------------------------------------
 BARE_SIBLING = re.compile(r'sys\.executable,\s*["\']([a-z_]+\.py)["\']')
-for f in sorted(TOOLS.glob("*.py")):
+for f in scripts():
     for m in BARE_SIBLING.finditer(f.read_text(encoding="utf-8")):
         fail("bare-sibling-invocation", f"{f.name}",
              f"runs {m.group(1)!r} by bare name. cwd is the FILM; the tool is in the KIT. "
@@ -50,7 +56,7 @@ for f in sorted(TOOLS.glob("*.py")):
 # 2. No tool reads another tool's SOURCE from a film-relative path.
 # ---------------------------------------------------------------------------
 FILM_RELATIVE_TOOL = re.compile(r'HERE\s*/\s*["\']([a-z_]+\.py)["\']')
-for f in sorted(TOOLS.glob("*.py")):
+for f in scripts():
     for m in FILM_RELATIVE_TOOL.finditer(f.read_text(encoding="utf-8")):
         fail("tool-read-from-film", f"{f.name}",
              f"reads {m.group(1)!r} relative to the film. Use P.tool().")
@@ -60,7 +66,7 @@ for f in sorted(TOOLS.glob("*.py")):
 #    an expression may not depend on one.
 # ---------------------------------------------------------------------------
 PROJECT_NOUN = re.compile(r'["\'][^"\']*(?:tarn_facts|TARN_[A-Za-z0-9_]+\.md)[^"\']*["\']')
-for f in sorted(TOOLS.glob("*.py")):
+for f in scripts():
     src = f.read_text(encoding="utf-8")
     try:
         tree = ast.parse(src)
@@ -86,7 +92,7 @@ for f in sorted(TOOLS.glob("*.py")):
 #    import to all fourteen, which gave two argument-driven tools a hard
 #    dependency on a film existing -- they died with "no film found".
 # ---------------------------------------------------------------------------
-for f in sorted(TOOLS.glob("*.py")):
+for f in scripts():
     if f.name == "_project.py":
         continue
     src = f.read_text(encoding="utf-8")
@@ -105,7 +111,7 @@ for f in sorted(TOOLS.glob("*.py")):
 sys.path.insert(0, str(TOOLS))
 import _project as P  # noqa: E402
 
-for f in sorted(TOOLS.glob("*.py")):
+for f in scripts():
     for m in re.finditer(r'P\.(?:files|globs)\(["\']([a-z_]+)["\']\)', f.read_text(encoding="utf-8")):
         if m.group(1) not in P.DEFAULT_FILES:
             fail("unknown-document-role", f.name,
@@ -191,7 +197,11 @@ for name in _DOCS:
         continue
     text = doc.read_text(encoding="utf-8")
     for line in text.splitlines():
-        if "(PLANNED" in line or "historical" in line.lower():
+        # ONE convention, explicit. The first version also exempted any line
+        # containing the word "historical", which is a fuzzy match on prose and
+        # would exempt a genuinely stale path in a sentence that happened to use
+        # the word. A path that is not there now must SAY which it is.
+        if any(k in line for k in ("(PLANNED", "(REMOVED", "(HISTORICAL")):
             continue
         for rx in (_PATH_IN_PROSE, _PATH_IN_TREE):
             for m in rx.finditer(line + " "):

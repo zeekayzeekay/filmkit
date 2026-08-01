@@ -436,6 +436,35 @@ def main():
         print(f"  {k:10s} {'PASS' if v else 'FAIL'}")
     allok = all(results.values())
     print("=" * 66)
+
+    # ---- FK3. THE RECEIPT. Written ONLY on an all-green run that includes the
+    # manual items -- which is to say, only when a person has read the exported
+    # prompt end to end and signed for it. A gate keyed on the automatic phases
+    # alone would pass a prompt nobody had read, which is the fault F-37 exists
+    # about. No receipt, no fire: hooks/gate.py refuses any Higgsfield call whose
+    # prompt does not hash to one.
+    if allok and a.export and "manual" in results:
+        import datetime as _dt
+        import _receipt as R
+        txt = (HERE / a.export).read_text(encoding="utf-8")
+        rp = R.write(HERE, txt,
+                     block=a.block,
+                     fact_rev=P.FACTS.get("_fact_rev"),
+                     kit_version=P.kit_version(),
+                     phases=dict(results),
+                     stamp=_dt.datetime.now(_dt.timezone.utc)
+                           .strftime("%Y-%m-%dT%H:%M:%SZ"))
+        print(f"  receipt written: {rp.relative_to(HERE)}")
+        print(f"  it authorises THIS prompt only — {R.short(R.digest(txt))} — and expires "
+              f"in {R.STALE_AFTER_HOURS}h\n")
+    elif a.export:
+        print("  \033[93mno receipt written — a generation will be REFUSED.\033[0m")
+        if "manual" not in results:
+            print("  Pass --record so the manual items are checked; the receipt requires them.\n")
+        else:
+            print("  Every phase above must be PASS, including the ones only a person can "
+                  "answer.\n")
+
     if allok and "manual" in results:
         print("  PASS — automatic checks green and every manual item answered.")
         print("  Report 'no faults of any known class', never 'clean', and name")
