@@ -6,7 +6,7 @@
 | FK1 | extract and de-TARN the fourteen guards | **done** |
 | FK2 | portability test, split the 74 findings | **test done**, split pending |
 | FK3 | gate.py + self-gating tools | **done** |
-| FK4 | engine.json, craft skills, look packs | pending |
+| FK4 | engine.json, craft skills, look packs | **engine + skills done**, look packs pending |
 | FK5 | dual-run against TARN | pending |
 | FK6 | promotion ritual, session state | pending |
 | FK7 | init, doctor, private GitHub repo | pending |
@@ -85,3 +85,16 @@ It fails CLOSED on an unreadable payload.
 
 kit_lint now covers `hooks/` — gate.py was the one file in the repo whose correctness
 costs money and it was outside every check.
+
+## FK4
+
+Layer 1 measured against the live catalogue — `models_explore action=get` on all nine ids,
+each row carrying its own `verified:` line. Six things it found contradict or extend what
+the origin project holds; `generate_audio` defaulting to TRUE is the one that matters today.
+
+Layer 2 is six skills to the agentskills.io spec, which both hosts read — only the install
+path differs (`.claude/skills` vs `.agents/skills`), and that is `filmkit-doctor`'s job.
+
+kit_lint gains checks 10 (engine facts inside their expiry) and 11 (skills conform). Both
+proven to discriminate. Check 11 had a hole on first write: `description: ` with a trailing
+space parsed as one character and passed a `1 <= len` test.

@@ -241,6 +241,45 @@ if _eng.exists():
                  f"_verified_on {on!r} is not an ISO date.")
 
 
+# ---------------------------------------------------------------------------
+# 11. SKILLS CONFORM TO THE OPEN SPEC. agentskills.io standardises the FOLDER
+#     FORMAT, and both hosts read it -- only the install path differs
+#     (.claude/skills vs .agents/skills). `name` must match the parent
+#     directory, or the skill loads under a name nothing refers to.
+# ---------------------------------------------------------------------------
+_SKILLS = KIT / "skills"
+if _SKILLS.exists():
+    for _d in sorted(x for x in _SKILLS.iterdir() if x.is_dir()):
+        _s = _d / "SKILL.md"
+        if not _s.exists():
+            fail("skill-without-skill-md", f"skills/{_d.name}",
+                 "a skill directory with no SKILL.md is a directory both hosts ignore.")
+            continue
+        _t = _s.read_text(encoding="utf-8")
+        _m = re.match(r"^---\n(.*?)\n---\n", _t, re.S)
+        if not _m:
+            fail("skill-without-frontmatter", f"skills/{_d.name}",
+                 "no YAML frontmatter; name and description are how a host decides to load it.")
+            continue
+        # STRIP the values. `description: ` with a trailing space parsed as a
+        # one-character description and sailed through `1 <= len(desc)` — a
+        # whitespace-only description is exactly as useless to a host as an
+        # absent one, and this check existed to catch absent ones.
+        _fm = {k: v.strip() for k, v in
+               re.findall(r"^(\w[\w-]*):\s*(.+)$", _m.group(1), re.M)}
+        _name, _desc = _fm.get("name", ""), _fm.get("description", "")
+        if _name != _d.name:
+            fail("skill-name-mismatch", f"skills/{_d.name}",
+                 f"frontmatter name is {_name!r}; the spec requires it to match the directory.")
+        if not re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", _name or ""):
+            fail("skill-name-shape", f"skills/{_d.name}",
+                 f"{_name!r} is not lowercase-alnum-with-single-hyphens.")
+        if not (1 <= len(_desc) <= 1024):
+            fail("skill-description", f"skills/{_d.name}",
+                 f"description is {len(_desc)} chars; the spec allows 1 to 1024. It is the only "
+                 f"thing a host reads before deciding to load the skill.")
+
+
 def main():
     tools = sorted(p.name for p in TOOLS.glob("*.py"))
     print(f"\n  kit lint — {len(tools)} tools\n")
@@ -251,7 +290,7 @@ def main():
         print("           import · unknown document roles · manifest paths present AND")
         print("           tracked · no empty directories · no env var in a hook")
         print("           registration · kit docs name no missing file · engine facts")
-        print("           still inside their expiry.\n")
+        print("           still inside their expiry · skills conform to the open spec.\n")
         print("  NOT checked: whether a rule is CORRECT, whether a threshold is right for")
         print("  your film, or whether a tool does what its docstring claims.\n")
         return 0
