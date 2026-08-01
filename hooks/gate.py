@@ -76,6 +76,29 @@ FREE = {
 }
 
 
+def find_film(start):
+    """
+    Locate the film from the directory the HOST reports, walking up.
+
+    The gate used to reach `_project`, which resolves from the PROCESS's cwd. A
+    hook's cwd is whatever the host chose, and if it is not the film directory
+    `_project` raises SystemExit -- the gate exits non-zero, both hosts read that
+    as a hook FAILURE, and a hook failure lets the call through. The gate would
+    have stopped gating and said nothing.
+
+    The payload carries `cwd`. Use it.
+    """
+    d = pathlib.Path(start or ".").resolve()
+    for cand in [d] + list(d.parents):
+        f = cand / "film_facts.json"
+        if f.exists():
+            return cand, f
+        found = sorted(cand.glob("*_facts.json"))
+        if len(found) == 1:
+            return cand, found[0]
+    return None, None
+
+
 def decide(payload, *, now_utc=None, film_dir=None):
     """Pure function: payload in, (decision, reason) out. Testable without a host."""
     tool_full = payload.get("tool_name") or ""
@@ -87,16 +110,17 @@ def decide(payload, *, now_utc=None, film_dir=None):
         return "allow", ""
 
     args = payload.get("tool_input") or {}
+    params = args.get("params") if isinstance(args.get("params"), dict) else {}
+    # ORDER MATTERS. `params.prompt` is where this server actually carries the
+    # prompt; `description` is a generic field that may be something else
+    # entirely. Checking description first would hash the wrong string, and a
+    # hash of the wrong string is not a check of the right one.
     prompt = ""
-    for key in ("prompt", "text", "input_text", "description"):
-        v = args.get(key)
-        if isinstance(v, str) and v.strip():
-            prompt = v
+    for src in (args.get("prompt"), params.get("prompt"),
+                args.get("text"), args.get("input_text"), args.get("description")):
+        if isinstance(src, str) and src.strip():
+            prompt = src
             break
-    if not prompt:
-        params = args.get("params")
-        if isinstance(params, dict) and isinstance(params.get("prompt"), str):
-            prompt = params["prompt"]
 
     if not prompt:
         return "deny", (
@@ -105,13 +129,34 @@ def decide(payload, *, now_utc=None, film_dir=None):
             f"to FREE in hooks/gate.py — deliberately, with the reason.")
 
     import datetime as _dt
+    import json as _json
     import _project as P
     import _receipt as R
 
-    film = pathlib.Path(film_dir) if film_dir else P.DIR
+    if film_dir:
+        film, facts_path = pathlib.Path(film_dir), None
+        facts = {}
+        for c in sorted(pathlib.Path(film_dir).glob("*_facts.json")):
+            facts_path = c
+            break
+    else:
+        film, facts_path = find_film(payload.get("cwd"))
+        facts = {}
+    if film is None:
+        return "deny", (
+            f"filmkit REFUSED {tool}. No film found from {payload.get('cwd')!r} — expected a "
+            f"film_facts.json at or above it. The gate will not authorise a spend it cannot "
+            f"check. If this is deliberate, run outside a film without the hook registered.")
+    if facts_path is not None and facts_path.exists():
+        try:
+            facts = _json.loads(facts_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            return "deny", (f"filmkit REFUSED {tool}. The film's facts file could not be read "
+                            f"({e}). Refusing rather than assuming.")
+
     now = now_utc or _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     rec = R.read(film, prompt)
-    bad = R.check(rec, fact_rev=P.FACTS.get("_fact_rev"),
+    bad = R.check(rec, fact_rev=facts.get("_fact_rev"),
                   kit_version=P.kit_version(), now_utc=now)
     if not bad:
         return "allow", ""
@@ -129,28 +174,47 @@ def decide(payload, *, now_utc=None, film_dir=None):
     return "deny", " ".join(lines)
 
 
-def main():
-    if "--selftest" in sys.argv:
-        return selftest()
-    try:
-        payload = json.load(sys.stdin)
-    except Exception as e:
-        # FAIL CLOSED on a payload we cannot read. A gate that cannot understand
-        # the question must not answer 'yes' to it.
-        print(json.dumps({"hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": "deny",
-            "permissionDecisionReason": f"filmkit gate could not read the hook payload ({e}). "
-                                        f"Refusing rather than assuming."}}))
-        return 0
-    decision, reason = decide(payload)
-    if decision == "allow":
-        return 0
+def _deny(reason):
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": "PreToolUse",
         "permissionDecision": "deny",
         "permissionDecisionReason": reason}}))
     return 0
+
+
+def main():
+    """
+    EVERY exit from here is 0 with a decision, or 0 with a DENY. Never a raise.
+
+    This is the whole safety property and the first version did not have it. Only
+    JSON parse errors were caught; anything else propagated. Run outside a film
+    directory, `_project` raised SystemExit, the gate exited 1 with no
+    hookSpecificOutput -- and both hosts read a non-zero exit that is not 2 as a
+    hook FAILURE, which means the call proceeds.
+
+    So the gate stopped gating, silently, in exactly the situation where somebody
+    is most likely to be experimenting: outside a project. That is FK-03's lesson
+    -- a hook that fails, fails OPEN -- rebuilt inside the gate one commit after
+    writing it down.
+
+    A gate is a thing that says no when it cannot say yes.
+    """
+    if "--selftest" in sys.argv:
+        return selftest()
+    try:
+        payload = json.load(sys.stdin)
+    except Exception as e:
+        return _deny(f"filmkit gate could not read the hook payload ({e}). "
+                     f"Refusing rather than assuming.")
+    try:
+        decision, reason = decide(payload)
+    except BaseException as e:                     # SystemExit included, deliberately
+        return _deny(f"filmkit gate raised {type(e).__name__}: {e}. A gate that cannot "
+                     f"answer the question must not answer 'yes' to it. Fix the gate, or "
+                     f"unregister the hook if you mean to work without it.")
+    if decision == "allow":
+        return 0
+    return _deny(reason)
 
 
 # ---------------------------------------------------------------------------
@@ -193,8 +257,17 @@ def selftest():
     case("a spending tool with no prompt to check", call("upscale_video", id="abc"), "deny")
 
     with tempfile.TemporaryDirectory() as d:
+        # A REAL film, however small. The first version wrote receipts using the
+        # surrounding film's fact_rev while the gate read the empty temp dir's --
+        # 103 against None -- so two cases failed for a reason that had nothing to
+        # do with the gate. It also meant `--selftest` only worked from inside a
+        # film, which is the wrong dependency for a test of a hook.
+        FACT_REV = 7
+        (pathlib.Path(d) / "film_facts.json").write_text(
+            json.dumps({"_fact_rev": FACT_REV, "kit_version": P.kit_version(),
+                        "look_pack": None, "assets": {}}), encoding="utf-8")
         text = "SCENE CONTEXT\nA man at a window.\n"
-        good = dict(block="X", fact_rev=P.FACTS.get("_fact_rev"),
+        good = dict(block="X", fact_rev=FACT_REV,
                     kit_version=P.kit_version(),
                     phases={"guards": True, "manual": True}, stamp=NOW)
         R.write(d, text, **good)
@@ -217,6 +290,32 @@ def selftest():
         R.write(d, text, **{**good, "stamp": "2026-07-01T12:00:00Z"})
         case("a receipt older than the limit",
              call("generate_video", prompt=text), "deny", film_dir=d)
+
+    # ---- END-TO-END. The cases above call decide(); the fail-OPEN bug lived in
+    # main(), where an uncaught exception exited non-zero with no decision. A
+    # decide()-level test could never have caught it. These run the script.
+    import subprocess as _sp
+    print("\n  FAIL-CLOSED (the script, not the function)\n")
+
+    def e2e(name, payload_text, cwd="/"):
+        nonlocal ok
+        r = _sp.run([sys.executable, str(pathlib.Path(__file__).resolve())],
+                    input=payload_text, capture_output=True, text=True, cwd=cwd)
+        denied = '"permissionDecision": "deny"' in r.stdout
+        good = denied and r.returncode == 0
+        if not good:
+            ok = False
+        print(f"  {'ok ' if good else '!! '}{name:54s} exit {r.returncode}  "
+              f"{'deny' if denied else 'NO DECISION'}")
+
+    e2e("outside any film",
+        json.dumps({"tool_name": "mcp__higgsfield__generate_video",
+                    "cwd": "/", "tool_input": {"prompt": "x"}}))
+    e2e("unparseable stdin", "this is not json")
+    e2e("tool_input is not a dict",
+        json.dumps({"tool_name": "mcp__higgsfield__generate_video",
+                    "cwd": "/", "tool_input": "a string"}))
+    e2e("payload is a list, not an object", json.dumps([1, 2, 3]))
 
     print()
     if ok:

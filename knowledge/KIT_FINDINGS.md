@@ -244,3 +244,63 @@ be keyed on the fully green run, which is the one a human has signed.**
 **What is not encoded:** nothing runs the documented command in a clean directory as part of
 the suite. That is what a scratch project is for, and it is currently a habit rather than a
 test.
+
+---
+
+## FK-05 · I WROTE DOWN THAT A FAILING HOOK FAILS OPEN, THEN BUILT ONE
+
+<!-- guard: automatic  scope: process
+     ask: does every path out of this gate produce a DECISION — including the paths that are errors? -->
+
+**Cost:** none, caught in review one commit later. Had it shipped, the gate would have stopped
+gating **in exactly the situation where somebody is most likely to be experimenting** — outside
+a project — and said nothing at all.
+
+FK-03, written the previous working session, established this:
+
+> a hook command that fails for any reason other than exit 2 is a **hook failure, and
+> processing continues** — so an env var that does not expand does not block the generation and
+> does not raise an alarm.
+
+I removed the guessed variable. Then I wrote `gate.py` with a `try/except` around **only** the
+JSON parse, and left every other failure path to propagate.
+
+```
+$ cd /tmp/nofilm
+$ echo '{"tool_name":"mcp__higgsfield__generate_video", ...}' | python3 gate.py
+  ! no film found in /tmp/nofilm
+[exit 1]
+```
+
+Exit 1, no `hookSpecificOutput`. Both hosts read that as hook failure. **The generation
+proceeds.** `_project` resolves the film from the *process's* cwd and raises `SystemExit` when
+it cannot find one — correct behaviour for a command-line tool, fatal for a hook.
+
+**Two distinct faults, one symptom.**
+
+*The gate asked the wrong question about location.* A hook's cwd is whatever the host chose. The
+payload carries `cwd` and the gate ignored it. It now walks up from the reported directory and,
+finding no film, **denies with a reason** instead of dying.
+
+*The gate had no floor.* Every exit must be `0` with a decision. It now catches `BaseException`
+— `SystemExit` included, deliberately — and denies with the exception in the reason.
+
+> **A gate is a thing that says no when it cannot say yes.**
+
+**And the tests could not have caught it**, which is the part worth keeping. All fifteen cases
+called `decide()`, a pure function that returns a tuple. The fail-open lived in `main()`, in the
+gap between that tuple and the process's exit code. **A test that only ever calls the pure core
+cannot see the shell around it.** Four end-to-end cases now run the script as a subprocess and
+assert exit 0 *and* a deny: outside any film, unparseable stdin, `tool_input` that is not a
+dict, and a payload that is a list.
+
+**A third fault, found in the same pass.** The selftest built its temp film as an empty
+directory and wrote receipts using the *surrounding* film's `fact_rev` — 103 against `None`.
+Two cases failed for a reason that had nothing to do with the gate, and `--selftest` only
+worked from inside a film, which is precisely the wrong dependency for a test of a hook. The
+fixture is now a real, minimal film; the selftest runs anywhere.
+
+**What is not encoded:** nothing proves the host actually invokes this file, or that the
+operator has trusted it. An inert gate is indistinguishable from a permissive one from the
+inside — `filmkit-doctor` must report *registered* and *trusted* as two separate states, and
+until it exists that check is a habit.
