@@ -197,3 +197,50 @@ assumption that broke twelve call sites, restated as instruction.
 **What is not encoded:** nothing clones the bundle and runs the suite from the clone. That is
 the real test and it is still a manual step — `tests/dual_run.py` (FK5) will do it from a
 fresh clone rather than from the working copy, which is the only way this class stays dead.
+
+---
+
+## FK-04 · THE PHASE THAT VERIFIES THE EXPORT RAN BEFORE THE PHASE THAT WRITES IT
+
+<!-- guard: manual  scope: process
+     ask: has the documented command been run from a clean directory, or only where earlier runs left files behind? -->
+
+**Cost:** none yet, and only because the fault hides itself. Inherited from the origin project,
+byte-identical — this is not a porting defect.
+
+`preflight.py`'s documented invocation is
+
+```
+python3 preflight.py --block "<BLOCK>" --record RUN.md --export OUT.txt
+```
+
+`check_fullread` **reads** the export. `check_export` **writes** it. In `main()` the read ran
+two lines before the write.
+
+So the first run of the documented command, in a directory where that export does not yet
+exist, dies on `FileNotFoundError` with a stack trace — no phase verdict, no `FAIL — do not
+fire`, just a traceback. It has always appeared to work because a previous run always left the
+file behind.
+
+**Why it survived.** A tool used every day in one directory accumulates its own outputs, and
+those outputs become undeclared inputs. The command was never run anywhere clean, so the
+dependency never showed. **The kit made it visible immediately**, because a fresh scratch
+project is by definition a clean directory — which is an argument for building one even when
+you already have a working project.
+
+**A traceback is not a phase result.** `preflight`'s central promise is *no partial pass: any
+phase failing means do not fire.* A stack trace is the absence of a verdict, and an absence is
+the one thing that promise cannot describe. A phase that cannot run must FAIL, loudly, by name,
+with the reason.
+
+**Fix.** Produce, then verify — `check_export` now runs first. And `check_fullread` reports a
+named phase failure with the likely cause when the export is missing, instead of raising.
+
+Verified afterwards on the real prompts file: with a unique block name, `export` PASS writing
+20 KB of prompt, `prompt` PASS, and `full-read` / `manual` FAIL exactly as designed, because
+both require a person to read and attest. That last part matters for FK3 — **the receipt must
+be keyed on the fully green run, which is the one a human has signed.**
+
+**What is not encoded:** nothing runs the documented command in a clean directory as part of
+the suite. That is what a scratch project is for, and it is currently a habit rather than a
+test.

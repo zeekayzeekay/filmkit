@@ -17,7 +17,7 @@ What it did not cover, and what this adds:
 |---|---|---|
 | Tells you to **copy** the kit per project | forks it — a guard fixed on film 3 never reaches films 1 and 2 | one versioned repo, projects pin a `kit_version` |
 | Splits general from film-specific **by judgement** | decays in one film; it is the same shape as every recurrence we logged | `portability_test.py` — a mechanical test |
-| Holds **no craft knowledge** — guards only | Leera, the Seedance method, sheet-building and script↔shot discipline live nowhere reusable | `skills/` and `knowledge/craft.md` |
+| Holds **no craft knowledge** — guards only | Leera, the Seedance method, sheet-building and script↔shot discipline live nowhere reusable | `skills/` and `knowledge/craft.md` (PLANNED — FK4) |
 | Nothing **loads state into the model** | the operator has to say "read these six documents", and I still forget | `SessionStart` hook |
 | Nothing **stops the spend** | every guard is advisory at the moment money is committed | `PreToolUse` deny + self-gating tools |
 
@@ -145,6 +145,13 @@ did not match its own file.
 **Override** exists, requires an explicit phrase, and writes the reason into the run
 record. An override you cannot audit is not an override, it is a hole.
 
+**Where the registration comes from.** It is **generated** by `filmkit-doctor --install`,
+with an absolute path to `gate.py`, into `<film>/.claude/settings.json` and
+`<film>/.codex/hooks.json`. The first scaffold shipped two hand-written registrations, one of
+which interpolated a Codex plugin-root variable that was a guess — and a hook command that
+fails to expand is a *hook failure*, which both hosts treat as **let the call through**. A
+guessed variable in the enforcement path produces a gate that silently is not one. See FK-03.
+
 **Second layer:** the tools self-gate. `preflight --export` is the only path to a fireable
 prompt file, and it will not write one without a green run. So even with the hook absent,
 there is nothing to paste.
@@ -209,14 +216,15 @@ filmkit/
 │   ├── shot-script-coherence/      script ↔ shot map, both directions
 │   └── film-review/                review order, tolerance table
 ├── hooks/
-│   ├── gate.py                     ONE gate script
-│   ├── session_start.py            state loader
-│   └── hooks.json                  Codex registration
-├── settings/claude.settings.json   Claude registration
+│   ├── gate.py                     ONE gate script            (PLANNED — FK3)
+│   ├── session_start.py            state loader               (PLANNED — FK6)
+│   └── registration/               GENERATED, never shipped —
+│                                   see hooks/registration/README.md
 ├── tools/                          the thirteen guards, de-TARNed
 ├── knowledge/
 │   ├── engine.json                 layer 1, with verified_on
-│   ├── craft.md                    layer 2
+│   ├── KIT_FINDINGS.md             faults in the machinery itself
+│   ├── craft.md                    layer 2                    (PLANNED — FK4)
 │   ├── FINDINGS.md                 layer 3, general only
 │   └── looks/<pack>/               layer 4, opt-in
 ├── templates/new-project/          what filmkit init lays down

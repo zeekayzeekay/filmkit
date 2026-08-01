@@ -56,3 +56,15 @@ general is indistinguishable from a comparison that measures nothing.
 Also fixed in passing: `checklist.py` parsed `F-61b` as id `F-61` titled `b · …`,
 colliding with the real F-61 — in the tool whose whole purpose is that the checklist
 cannot disagree with the ledger.
+
+## Review pass before FK3
+
+kit_lint gains check 9: the kit's own documents may not name a file that is not there.
+`staleness.py` does this for a FILM and nothing did it for the kit — `ARCHITECTURE.md`
+went on describing `settings/claude.settings.json` for two commits after that file was
+deleted in the FK0 audit. A design record documenting a layout the repo does not have is
+worse than none, because it is read as authority. Paths not built yet are marked (PLANNED).
+
+`preflight --record --export` exercised for the first time and found FK-04: the export
+was verified before it was written, so the documented command crashed on any clean
+directory. Byte-identical to the origin — inherited, not introduced.

@@ -170,6 +170,40 @@ for h in sorted((KIT / "hooks").rglob("*.json")):
              "absolute paths; a variable that does not expand fails OPEN.")
 
 
+# ---------------------------------------------------------------------------
+# 9. THE KIT'S OWN DOCUMENTS DO NOT NAME FILES THAT ARE NOT THERE.
+#    staleness.py does exactly this for a FILM and nothing did it for the kit.
+#    ARCHITECTURE.md was written before the FK0 audit and went on describing
+#    settings/claude.settings.json for two commits after that file was deleted —
+#    a design record that documents a layout the repo does not have is worse than
+#    no design record, because it is read as authority.
+#
+#    A path that does not exist YET is legitimate: mark it (PLANNED) on the same
+#    line, and say which task builds it.
+# ---------------------------------------------------------------------------
+_DOCS = ["ARCHITECTURE.md", "README.md", "AGENTS.md", "CLAUDE.md", "docs/STATUS.md"]
+_PATH_IN_PROSE = re.compile(r"`([a-z_][\w./-]*\.(?:py|json|md|txt))`")
+_PATH_IN_TREE = re.compile(r"^\s*[│├└─\s]*([a-z_][\w-]*/[\w./-]+)\s", re.M)
+
+for name in _DOCS:
+    doc = KIT / name
+    if not doc.exists():
+        continue
+    text = doc.read_text(encoding="utf-8")
+    for line in text.splitlines():
+        if "(PLANNED" in line or "historical" in line.lower():
+            continue
+        for rx in (_PATH_IN_PROSE, _PATH_IN_TREE):
+            for m in rx.finditer(line + " "):
+                rel = m.group(1).rstrip("/")
+                if "<" in rel or "/" not in rel:
+                    continue
+                if not (KIT / rel).exists():
+                    fail("kit-doc-names-missing-file", f"{name}",
+                         f"names {rel!r}, which does not exist. If it is not built yet, mark "
+                         f"the line (PLANNED — FKn).")
+
+
 def main():
     tools = sorted(p.name for p in TOOLS.glob("*.py"))
     print(f"\n  kit lint — {len(tools)} tools\n")
@@ -179,7 +213,7 @@ def main():
         print("           hard-coded project nouns in code · unused or missing _project")
         print("           import · unknown document roles · manifest paths present AND")
         print("           tracked · no empty directories · no env var in a hook")
-        print("           registration.\n")
+        print("           registration · kit docs name no missing file.\n")
         print("  NOT checked: whether a rule is CORRECT, whether a threshold is right for")
         print("  your film, or whether a tool does what its docstring claims.\n")
         return 0

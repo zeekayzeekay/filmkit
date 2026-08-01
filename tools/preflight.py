@@ -321,7 +321,17 @@ def check_fullread(export, record):
     # patch_block hashed the body without one, so the two disagreed and the
     # attestation I wrote pointed at a version that did not exist. One artefact,
     # one hash — two schemes for the same thing is a way to attest to nothing.
-    txt = (HERE / export).read_text(encoding="utf-8")
+    src = HERE / export
+    if not src.exists():
+        # A phase that cannot run is a phase that FAILS, loudly and by name. It
+        # is never a traceback -- "no partial pass" means every phase reports a
+        # verdict, and a stack trace is the absence of one.
+        print(f"\n=== FULL READ — {export}")
+        print(f"  !! {export} was not written, so there is nothing to read.")
+        print("     The export phase runs first and produces it; if that phase failed,")
+        print("     fix it there. A common cause is a --block name that matches no block.")
+        return False
+    txt = src.read_text(encoding="utf-8")
     h = hashlib.sha256(txt.encode()).hexdigest()[:12]
     words = len(txt.split())
     print(f"\n=== FULL READ — {export}  sha {h}  ({words} words)")
@@ -410,10 +420,14 @@ def main():
     if a.shot:
         results["shotmap"] = check_shotmap(a.shot)
         results["cross-shot"] = check_crossshot(a.shot, a.record)
-    if a.export:
-        results["full-read"] = check_fullread(a.export, a.record)
+    # ORDER MATTERS, and it was wrong. check_fullread READS the export and
+    # check_export WRITES it, and full-read ran first -- so the first run of the
+    # documented command died with a FileNotFoundError traceback instead of a
+    # phase result. It only ever appeared to work because a previous run had
+    # left the file behind. Produce, then verify.
     if a.export:
         results["export"] = check_export(a.block, a.export)
+        results["full-read"] = check_fullread(a.export, a.record)
     if a.record:
         results["manual"] = check_record(a.record)
 
