@@ -71,3 +71,68 @@ cost of stale input is a whole build declared verified, hash it.
 **What is not encoded:** nothing hashes automatically. This is a procedure with a manifest
 format, enforced at the point it matters — `tests/dual_run.py` (FK5) refuses to run without a
 matching `SOURCE_SHA256.txt`, so the acceptance gate cannot be passed on unverified input.
+
+---
+
+## FK-02 · THE DIFF WAS CLEAN AND THE PORT WAS BROKEN
+
+<!-- guard: automatic  scope: process
+     ask: each intended change — is it correct at EVERY site it lands on, or only at the one I grepped for? -->
+
+**Cost:** caught in review, before FK2 built on top of it. Had it shipped, `guard_coverage.py`
+would have reported **zero rules defined on every project, forever**, and twelve of the
+suite's subprocess calls would have failed on the first film that was not the origin.
+
+In the origin project the tools lived beside the film, so one word — `HERE` — meant both
+*where the film is* and *where the tools are*. Porting into a kit splits that word in two.
+
+**The split is a decision per USE SITE. I made it per FILE.** One `HERE = P.DIR` rebind at the
+top of each script, and done.
+
+| what broke | how many |
+|---|---|
+| `subprocess.run([sys.executable, "shotmap.py", …], cwd=film)` — tool no longer there | **12** |
+| `(HERE / "lint_prompt.py").read_text()` to count rules — reads from the film | 1 |
+| `LIVE_DOCS` still listing five `TARN_*.md` filenames | 1 |
+| `_project` imported into two tools that take files as arguments, giving them a hard dependency on a film they never read | 2 |
+| `CORPUS` mixing bare filenames with absolute paths in one list | 1 |
+| `FIXTURES` / `MUTATIONS`: literal dicts keyed by one film's filenames, inside the engine | 7 entries |
+
+**Pass 2 of the port fixed exactly two of the twelve** — the two an earlier grep had surfaced.
+I searched for a pattern, fixed what the search returned, and declared the pass complete
+without asking where else the pattern occurred. That is the same move as F-70 (fixed the
+anchors a grep found) and F-72 (wrote a gate, never asked which rows could no longer satisfy
+it), and it is now the third time in one working day.
+
+**The review that should have caught it did not, and the reason is the interesting part.**
+I diffed all fourteen ported files against verified source and read every hunk. **All 27 hunks
+were intended changes.** The diff was clean. It was clean because the question a diff answers
+is *did anything change that should not have?* — and every one of these defects is an intended
+change that was **correct in one place and wrong in nine others.**
+
+> **A diff shows you what moved. It cannot show you what should have moved with it.**
+
+**What actually caught it** was reading the *use sites* rather than the *change sites*:
+`grep -n "HERE" *.py` and classifying each hit as film-path or kit-path. Six minutes. It should
+have been the first thing after the port, not the third.
+
+**Guard.** `tests/kit_lint.py` — the kit lints itself, and every check is a defect that
+actually shipped in the first port:
+
+1. `bare-sibling-invocation` — a tool invoked by name rather than `P.tool()`
+2. `tool-read-from-film` — a tool's source read from a film-relative path
+3. `hardcoded-project-noun` — a project filename in **code** (prose may cite one as evidence; an expression may not depend on one), checked against the AST so docstrings are exempt
+4. `unused-project-import` / `missing-project-import` — resolving the film has side effects, so an unused import is not a dead import
+5. `unknown-document-role` — a document role no resolver defines
+
+It found two faults I had already declared fixed: `lint_prompt`'s direction-audit message told
+the reader to look things up in `tarn_facts.json`, and `preflight`'s fixture tables were
+literal dicts keyed by `TARN_lint_regression*.md`. Both now resolve through the film; the
+fixture corpus moved to `tests/fixtures/manifest.json`, which is also the seam FK2 needs.
+
+**The transferable rule.** *When one name is split into two, audit the uses, not the
+definition.* The definition is where the change is visible and the uses are where it is wrong.
+
+**What is not encoded:** the lint checks structure, not meaning. It cannot tell whether a rule
+is correct, whether a threshold suits your film, or whether a tool does what its docstring
+claims. And it only knows the five classes that have already bitten.

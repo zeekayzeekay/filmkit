@@ -23,16 +23,10 @@ Usage
   python3 preflight.py --fixtures              # just prove the guards still fire
 """
 import argparse, pathlib, re, subprocess, sys
+import json
 import _project as P  # FK1: where the film is
 
 
-# ---------------------------------------------------------------------------
-# FK1. Tools no longer live beside the film, so a sibling is found by the KIT
-# path and a document by the FILM path. Conflating the two is what made the
-# origin project's plumbing quietly unportable while its rules were portable.
-# ---------------------------------------------------------------------------
-def _tool(name):
-    return str(pathlib.Path(__file__).resolve().parent / name)
 
 HERE = P.DIR
 
@@ -40,52 +34,29 @@ HERE = P.DIR
 # is added — which happened on the first day this file existed, when three new
 # checks pushed the sibling fixture from 3 errors to 6 and made its own header
 # wrong. A rule name is stable; a count is a hostage to the next commit.
-FIXTURES = {
-    "TARN_lint_regression.md": {
-        "tripwire": 16, "aspect-in-body": 1,
-    },
-    "TARN_lint_regression_timing.md": {
-        "timing:stale-duration": 4,
-    },
-    "TARN_lint_regression_sibling.md": {
-        "sibling-conformance": 4,
-    },
-    # Added 30 Jul. Every rule here is a fault that shipped in G3 v3 and was
-    # found only by measuring the delivered clip. See TARN_FINDINGS.md.
-    "TARN_lint_regression_v3faults.md": {
-        "negation-budget": 1,
-        "beat-without-action": 1,
-        "beat-too-short": 2,
-        "stop-vs-end-pose": 1,
-        "arc-plus-turn": 1,
-        "ungated-light-claim": 1,
-        "cost-mismatch": 1,
-        # F-13: a whole-frame prohibition overruling a claim about the person.
-        # The existing consistency checker could not see this — it groups by
-        # subject, and the two sentences live in different subject groups.
-        "scope-conflict": 1,
-        # F-16/F-17: wording the plate has retired. Also guards the mistake made
-        # while fixing it — retracting a claim dropped its supersedes list and
-        # silently un-enforced a correct rule, which nothing would have caught.
-        "asset-claim-superseded": 6,
-    },
-    # Added 1 Aug. F-58: four previz frames put the cafe door on a side wall
-    # because the brief never said the door and the glazing are one wall.
-    "TARN_lint_regression_layout.md": {
-        "room-plan-unpinned": 1,
-        "plan-by-frame-only": 1,
-        # F-60. Left and right are not depth.
-        "depth-order-unstated": 1,
-        # F-61b. A door described as "closing the far end" gets built into a
-        # brand-new wall across the back of the room.
-        "door-as-termination": 1,
-        # F-65. A room-plan position inside a frame that declares no room.
-        "room-position-in-tight-frame": 1,
-        # F-66. A fitting named in order to say it is not there.
-        "absent-object-named": 1,
-    },
-}
+# ---------------------------------------------------------------------------
+# FK1. These were literal dicts keyed by one film's filenames. They are DATA:
+# the kit seeds them, a film may add its own, and neither lives in the engine.
+# ---------------------------------------------------------------------------
+def _load_corpus():
+    merged = {"fixtures": {}, "mutations": {}}
+    seeds = [P.KIT.parent / "tests" / "fixtures" / "manifest.json"]
+    film = P.DIR / "fixtures_manifest.json"
+    if film.exists():
+        seeds.append(film)
+    for s in seeds:
+        if not s.exists():
+            continue
+        d = json.loads(s.read_text(encoding="utf-8"))
+        merged["fixtures"].update(d.get("fixtures", {}))
+        for k, v in d.get("mutations", {}).items():
+            merged["mutations"].setdefault(k, []).extend(v)
+    return merged
 
+
+_CORPUS = _load_corpus()
+FIXTURES = _CORPUS["fixtures"]
+MUTATIONS = {k: [tuple(x) for x in v] for k, v in _CORPUS["mutations"].items()}
 
 # MUTATION TESTS. A fixture proves a guard FIRES. It does not prove the guard
 # DISCRIMINATES — a rule that matches everything passes its fixture and is
@@ -96,54 +67,6 @@ FIXTURES = {
 #
 # So: repair the fault in the fixture text and assert the rule goes QUIET. If it
 # still fires on repaired text it is not testing what it claims to.
-MUTATIONS = {
-    "TARN_lint_regression_v3faults.md": [
-        ("negation-budget",
-         "There is no hard shadow anywhere, no beam, no motes, and nothing in the room is warmer than neutral. The air is not dusty. He is not lit from the side. Nothing brighter than the glass appears. No part of the frame is blown, and no surface is saturated. The greens are never emerald, never mint, never vivid. The whites are neither cream nor blue. He does not squint and he does not flinch. The camera does not retreat. The customers do not react and they are never frozen. Nothing else changes.",
-         "Every shadow edge is broad. The air is clean. He is lit from above."),
-        ("beat-without-action",
-         "2.2–3.0s — a warm edge of light begins to build along the back of his neck. He does not notice.",
-         "2.2–3.0s — he turns the cup a quarter turn on the counter and lets go of it."),
-        # NB the fixture states this fault TWICE — in ACTION and in POSITIVE
-        # LOCKS. A partial repair leaves the guard firing and reads as a guard
-        # bug; the first version of this mutation did exactly that. Repair every
-        # instance or the test is measuring the wrong thing.
-        ("stop-vs-end-pose",
-         "4.5–12.0s — he begins to turn. He stops turning at 7.0s and stands where he is from then on.",
-         "4.5–12.0s — he turns, then walks forward and stops short of the glass."),
-        ("stop-vs-end-pose",
-         "He stops turning at 7.0s and travels nowhere after it, though the camera goes on arcing.",
-         "He completes the turn, then walks forward as the camera holds."),
-        ("cost-mismatch", "12s · 42 cr draft", "12s · 54 cr draft"),
-        ("scope-conflict",
-         "and nothing in the frame is cooler, bluer, brighter or more saturated than the reference already is",
-         "and each named surface holds the reference's own temperature"),
-        ("asset-claim-superseded",
-         "THE ROOM. @cafe_int supplies the counter with its deep green panelled front and a broad brass strip along its base. The frontage has one continuous horizontal glazing bar at two-thirds height, and each glazing bay is divided into four lights.",
-         "THE ROOM. @cafe_int supplies the counter with its plain flat green front and a broad brass strip along its top edge. Each glazing bay is four columns wide and two rows high."),
-        # F-25. The paraphrase, in a block that never names @cafe_int. Both
-        # halves must be repaired or the guard keeps firing: this fault is
-        # stated once as "brass base strip" and once as a lone glazing bar.
-        ("asset-claim-superseded",
-         "The counter runs along the right-hand side of the frame with its dark wood top and brass base strip, and down the left side the green banquette with its marble tables.",
-         "The counter runs along the right-hand side of the frame, its broad brass strip along the TOP of its green front under the dark wood, above a plain recessed plinth."),
-        ("asset-claim-superseded",
-         "THE FRONTAGE. Heavy green mullion posts stand between the bays, and one continuous horizontal glazing bar runs across at two-thirds height.",
-         "THE FRONTAGE. Heavy green mullion posts stand between the bays, and each bay is four columns wide and two rows high."),
-    ],
-    "TARN_lint_regression_layout.md": [
-        # F-58. Both rules are silenced by the SAME repair, which is the point:
-        # the fault is one missing sentence, not two.
-        ("room-plan-unpinned", 'At the LEFT of the frame stands the green door, seen obliquely from inside, with the lake through its glazed upper half.', 'The door is part of the frontage, at its left end, coplanar with the glazing bays, and that one continuous wall is perpendicular to the counter.'),
-        ("absent-object-named", '; the handle is on the street side and stays out of sight from in here.', ', and the letterplate is the only metal on it.'),
-        ("room-position-in-tight-frame", 'an opening in the shopfront at the LEFT END OF THE FRONTAGE, coplanar with the glazing bays.', 'its hinges on the side away from the lens.'),
-        ("door-as-termination", 'the green door closes the far end of that same wall, seen almost square on.', 'the green door is the last opening in that same run of glazing, in the same plane as the bays, seen at an angle.'),
-        ("depth-order-unstated", 'At the LEFT of the frame stands the green door, seen obliquely from inside, with the lake through its glazed upper half.', 'NEAREST THE LENS at the left of the frame stands the green door, with the glazing bays raking away behind it.'),
-        ("depth-order-unstated", 'So the run of glazing comes toward the lens along the RIGHT of the picture and ends in the green door, which stands right of centre seen at a three-quarter angle, with the narrow white brick corner just beyond it.', 'NEAREST THE LENS, filling the right edge of the picture, the glazing bays rake steeply away, and the green door is the FAR end of that same wall, about three metres off and closing the run.'),
-        ("plan-by-frame-only", 'At the LEFT of the frame stands the green door, seen obliquely from inside, with the lake through its glazed upper half.', 'The door is part of the frontage, at its left end, coplanar with the glazing bays, and that one continuous wall is perpendicular to the counter.'),
-    ],
-}
-
 
 def check_mutations():
     """Repair each fixture's fault; the guard must fall silent."""
@@ -167,7 +90,7 @@ def check_mutations():
                 for b, g in pairs:
                     mutated = mutated.replace(b, g)
                 src.write_text(mutated, encoding="utf-8")
-                _, out = run([sys.executable, "lint_prompt.py", f])
+                _, out = run([sys.executable, P.tool("lint_prompt.py"), f])
                 still = len(re.findall(rf"\[(?:ERROR|WARN|CHECK)\] {re.escape(rule)}", out))
             finally:
                 src.write_text(original, encoding="utf-8")
@@ -190,7 +113,7 @@ def check_fixtures():
     print("\n=== GUARDS — do the checks still fire?")
     ok = True
     for f, expect in FIXTURES.items():
-        _, out = run([sys.executable, "lint_prompt.py", f])
+        _, out = run([sys.executable, P.tool("lint_prompt.py"), f])
         for rule, n in expect.items():
             got = len(re.findall(rf"\[(?:ERROR|WARN|CHECK)\] {re.escape(rule)}", out))
             mark = "ok " if got >= n else "FAIL"
@@ -205,7 +128,7 @@ def check_fixtures():
 
 def check_prompt(block):
     print(f"\n=== PROMPT — lint_prompt.py --block {block!r}")
-    code, out = run([sys.executable, _tool("lint_prompt.py"), str(P.files("prompts")),
+    code, out = run([sys.executable, P.tool("lint_prompt.py"), str(P.files("prompts")),
                      "--block", block])
     errs = re.findall(r"\[ERROR\] .*", out)
     warns = re.findall(r"\[WARN\] .*", out)
@@ -228,11 +151,11 @@ def check_frames(start, end, expect):
     for path, role in ((start, "start"), (end, "end")):
         if not path:
             continue
-        code, out = run([sys.executable, "frames_check.py", path, "--role", role])
+        code, out = run([sys.executable, P.tool("frames_check.py"), path, "--role", role])
         print("  " + "\n  ".join(l for l in out.splitlines() if l.strip()))
         ok &= (code == 0)
     if start and end:
-        code, out = run([sys.executable, "frames_check.py", start, end,
+        code, out = run([sys.executable, P.tool("frames_check.py"), start, end,
                          "--pair", "--expect", expect])
         print("  " + "\n  ".join(l for l in out.splitlines()[-6:] if l.strip()))
         ok &= (code == 0)
@@ -249,7 +172,7 @@ def check_shotmap(shot):
     recorded? Firing a prompt whose elements are not ready is how @whale went
     unnoticed until two shots could not be written."""
     print(f"\n=== SHOT MAP — is shot {shot} actually ready to build?")
-    code, out = run([sys.executable, "shotmap.py"])
+    code, out = run([sys.executable, P.tool("shotmap.py")])
     keep = [l for l in out.splitlines()
             if f"shot {shot}:" in l or f"shot {shot} " in l]
     if keep:
@@ -263,7 +186,7 @@ def check_shotmap(shot):
 def check_selections():
     """F-19: a frame chosen before a fact was corrected is provisional again."""
     print("\n=== SELECTIONS — chosen under the facts as they stand now?")
-    code, out = run([sys.executable, "selections.py", "--check"])
+    code, out = run([sys.executable, P.tool("selections.py"), "--check"])
     for l in out.splitlines():
         if l.strip():
             print("  " + l.strip())
@@ -277,7 +200,7 @@ def check_export(block, path):
     if not path:
         print("  no --export given; the prompt was not exported this run")
         return True
-    code, out = run([sys.executable, _tool("patch_block.py"), str(P.files("prompts")),
+    code, out = run([sys.executable, P.tool("patch_block.py"), str(P.files("prompts")),
                      "--block", block, "--export", path])
     print("  " + out.strip().replace("\n", "\n  "))
     return code == 0
@@ -291,7 +214,7 @@ def check_record(path):
     item has a written answer — an unanswered item is a failed run, exactly like
     a failed assertion."""
     import subprocess as sp
-    blank = sp.run([sys.executable, "checklist.py", "--manual"],
+    blank = sp.run([sys.executable, P.tool("checklist.py"), "--manual"],
                    capture_output=True, text=True, cwd=HERE).stdout
     items = re.findall(r"^## (M\d+) · (F-\d+|DECISION)", blank, re.M)
     print(f"\n=== MANUAL ITEMS — {len(items)}, derived from the findings ledger")
@@ -358,7 +281,7 @@ def check_neighbours(prev, new, record):
     """
     import subprocess
     print("\n=== SURVIVING SENTENCES — rewritten paragraphs, unchanged lines")
-    r = subprocess.run([sys.executable, "stale_neighbours.py", prev, new],
+    r = subprocess.run([sys.executable, P.tool("stale_neighbours.py"), prev, new],
                        capture_output=True, text=True, cwd=HERE)
     print(r.stdout.rstrip())
     n = 0
@@ -429,7 +352,7 @@ def check_crossshot(shot, record):
     """
     import subprocess
     print(f"\n=== CROSS-SHOT — shot {shot} against its neighbours and the script")
-    r = subprocess.run([sys.executable, "crossshot.py", str(shot), "--quiet"],
+    r = subprocess.run([sys.executable, P.tool("crossshot.py"), str(shot), "--quiet"],
                        capture_output=True, text=True, cwd=HERE)
     print(r.stdout.rstrip())
     want = f"CROSSSHOT-CHECKED: {shot}"
@@ -453,7 +376,7 @@ def check_staleness():
     way, and two dead headings still read "SELECTED" and "FINAL" days after the
     frames they named had been withdrawn.
     """
-    code, out = run([sys.executable, "staleness.py"])
+    code, out = run([sys.executable, P.tool("staleness.py")])
     print(out.rstrip())
     return code == 0
 

@@ -40,12 +40,14 @@ import _project as P  # FK1: where the film is
 # that has not happened to reproduce its fault yet.
 # ---------------------------------------------------------------------------
 def _kit_fixtures():
-    d = pathlib.Path(__file__).resolve().parent.parent / "tests" / "fixtures"
-    return sorted(str(p) for p in d.glob("*.md")) if d.exists() else []
+    d = P.KIT.parent / "tests" / "fixtures"
+    return sorted(d.glob("*.md")) if d.exists() else []
 
 HERE = P.DIR
-CORPUS = ["GUARD_SELFTEST.md"] + sorted(
-    p.name for p in P.globs("regression_globs")) + _kit_fixtures()
+# Absolute paths throughout. The first port mixed bare filenames (resolved
+# against the film) with absolute kit-fixture paths in one list, which happened
+# to work only because Path("/a") / "/b" returns "/b".
+CORPUS = [P.files("selftest")] + P.globs("regression_globs") + _kit_fixtures()
 
 # Rules that are STRUCTURALLY unprovable by a fixture, with the reason. Keeping
 # this list short and justified is the whole discipline: an entry here is a rule
@@ -59,22 +61,22 @@ EXEMPT = {
 
 
 def rules_defined():
-    src = (HERE / "lint_prompt.py").read_text(encoding="utf-8")
+    src = pathlib.Path(P.tool("lint_prompt.py")).read_text(encoding="utf-8")
     return set(re.findall(r'\("(?:ERROR|WARN|CHECK)",\s*"([a-z0-9:_-]+)"', src))
 
 
 def rules_fired():
     seen = {}
     for f in CORPUS:
-        if not (HERE / f).exists():
+        if not f.exists():
             continue
-        out = subprocess.run([sys.executable, "lint_prompt.py", f],
+        out = subprocess.run([sys.executable, P.tool("lint_prompt.py"), str(f)],
                              capture_output=True, text=True, cwd=HERE).stdout
         for h in re.findall(r"\[(?:ERROR|WARN|CHECK)\] ([a-z0-9:_-]+)", out):
             name = h.rstrip(":")
             if name.startswith("consistency"):
                 name = "consistency"
-            seen.setdefault(name, f)
+            seen.setdefault(name, f.name)
     return seen
 
 

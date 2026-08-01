@@ -30,7 +30,6 @@ import argparse, hashlib, pathlib, re, sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from lint_prompt import blocks
-import _project as P  # FK1: where the film is
 
 
 def fence_span(lines, title_pred):

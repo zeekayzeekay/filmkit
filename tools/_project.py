@@ -72,9 +72,36 @@ def project_path():
         "    Start one with: filmkit-init .\n")
 
 
-PATH = project_path()
-DIR = PATH.parent
-FACTS = json.loads(PATH.read_text(encoding="utf-8")) if PATH.exists() else {}
+# Where the KIT is. Distinct from where the FILM is, and conflating the two is
+# what broke twelve call sites in the first port: a tool invoked by bare name
+# with cwd set to the film directory is a tool that is no longer there.
+KIT = pathlib.Path(__file__).resolve().parent
+
+
+def tool(name):
+    """Absolute path to a sibling tool. Always use this to invoke one."""
+    return str(KIT / name)
+
+
+# LAZY. Resolving the film at import time gives every tool that merely imports
+# this module a hard dependency on a film existing -- including the two that take
+# their inputs as arguments and have no business needing one.
+_CACHE = {}
+
+
+def _resolve():
+    if "PATH" not in _CACHE:
+        p = project_path()
+        _CACHE["PATH"] = p
+        _CACHE["DIR"] = p.parent
+        _CACHE["FACTS"] = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+    return _CACHE
+
+
+def __getattr__(name):
+    if name in ("PATH", "DIR", "FACTS"):
+        return _resolve()[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 # ------------------------------------------------------------ the documents --
 # Defaults are what `filmkit-init` lays down. A film that renames one says so
@@ -99,37 +126,37 @@ def files(key):
     if key not in DEFAULT_FILES:
         raise KeyError(f"_project.files({key!r}) — not a known document role. "
                        f"Known: {sorted(DEFAULT_FILES)}")
-    v = FACTS.get("_files", {}).get(key, DEFAULT_FILES[key])
+    v = _resolve()["FACTS"].get("_files", {}).get(key, DEFAULT_FILES[key])
     if isinstance(v, list):
-        return [DIR / x for x in v]
-    return DIR / v
+        return [_resolve()["DIR"] / x for x in v]
+    return _resolve()["DIR"] / v
 
 
 def globs(key):
     """Expand the glob list under a document role, against the FILM's directory."""
-    pats = FACTS.get("_files", {}).get(key, DEFAULT_FILES[key])
+    pats = _resolve()["FACTS"].get("_files", {}).get(key, DEFAULT_FILES[key])
     out = []
     for p in pats:
-        out.extend(sorted(DIR.glob(p)))
+        out.extend(sorted(_resolve()["DIR"].glob(p)))
     return out
 
 
 def cfg(key, default):
     """Project override for anything the engine would otherwise hard-code."""
-    return FACTS.get("vocabulary", {}).get(key, default)
+    return _resolve()["FACTS"].get("vocabulary", {}).get(key, default)
 
 
 def save(d):
-    PATH.write_text(json.dumps(d, indent=2), encoding="utf-8")
+    _resolve()["PATH"].write_text(json.dumps(d, indent=2), encoding="utf-8")
 
 
 def load():
-    return json.loads(PATH.read_text(encoding="utf-8"))
+    return json.loads(_resolve()["PATH"].read_text(encoding="utf-8"))
 
 
 # ------------------------------------------------------------- the version ---
 def kit_version():
-    manifest = pathlib.Path(__file__).resolve().parent.parent / ".claude-plugin" / "plugin.json"
+    manifest = KIT.parent / ".claude-plugin" / "plugin.json"
     try:
         return json.loads(manifest.read_text(encoding="utf-8"))["version"]
     except Exception:
@@ -143,10 +170,11 @@ def check_pin():
     December. A mismatch is not fatal -- it is a decision somebody has to make --
     but it is never silent.
     """
-    pinned = FACTS.get("kit_version")
+    name = _resolve()["PATH"].name
+    pinned = _resolve()["FACTS"].get("kit_version")
     running = kit_version()
     if pinned is None:
-        _warn("no-pin", f"{PATH.name} pins no kit_version. Running {running}. "
+        _warn("no-pin", f"{name} pins no kit_version. Running {running}. "
                         f"Pin it, or a future kit will change this film's guards without saying so.")
         return
     if pinned != running:
@@ -154,11 +182,11 @@ def check_pin():
         if pmaj != rmaj:
             raise SystemExit(
                 f"\n  ! KIT MAJOR VERSION MISMATCH — refused.\n"
-                f"    {PATH.name} pins {pinned}; this kit is {running}.\n"
+                f"    {name} pins {pinned}; this kit is {running}.\n"
                 "    A major bump means a rule changed meaning. Upgrade the film deliberately\n"
                 "    (re-run the full suite and re-answer the manual items), or run the kit\n"
                 "    version this film was shot under.\n")
-        _warn("pin-drift", f"{PATH.name} pins kit {pinned}; running {running}. "
+        _warn("pin-drift", f"{name} pins kit {pinned}; running {running}. "
                            f"Same major, so the rules still mean what they meant.")
 
 
@@ -170,11 +198,12 @@ def look_pack():
     prevent. So a film either names a pack or explicitly declares none, and
     silence is neither.
     """
-    if "look_pack" not in FACTS:
-        _warn("no-look", f"{PATH.name} does not declare look_pack. Set it to a pack name or "
+    name = _resolve()["PATH"].name
+    if "look_pack" not in _resolve()["FACTS"]:
+        _warn("no-look", f"{name} does not declare look_pack. Set it to a pack name or "
                          f"to null. Silence is not the same as 'none'.")
         return None
-    return FACTS["look_pack"]
+    return _resolve()["FACTS"]["look_pack"]
 
 
 # --------------------------------------------------------------- provenance --
@@ -190,5 +219,5 @@ def source_manifest():
     Anything crossing a machine boundary is checked by CONTENT. The manifest that
     proves it travels with the payload.
     """
-    m = pathlib.Path(__file__).resolve().parent.parent / "tests" / "SOURCE_SHA256.txt"
+    m = KIT.parent / "tests" / "SOURCE_SHA256.txt"
     return m if m.exists() else None

@@ -1,0 +1,121 @@
+{
+  "_what": "The regression corpus, as DATA. Each key is a fixture file; the value says which rules must fire in it (fixtures) or which fault/repair pairs must make a rule go quiet (mutations). Seeded from the origin project. FK2 splits these into entries the KIT owns -- a rule general enough to survive the portability test brings its own neutral fixture -- and entries a FILM owns.",
+  "_why_not_code": "They were literal dicts keyed by one film's filenames, inside the engine. The kit's own lint caught it: a project noun in code is a project the engine knows about, and the engine is supposed to know about none.",
+  "fixtures": {
+    "TARN_lint_regression.md": {
+      "tripwire": 16,
+      "aspect-in-body": 1
+    },
+    "TARN_lint_regression_timing.md": {
+      "timing:stale-duration": 4
+    },
+    "TARN_lint_regression_sibling.md": {
+      "sibling-conformance": 4
+    },
+    "TARN_lint_regression_v3faults.md": {
+      "negation-budget": 1,
+      "beat-without-action": 1,
+      "beat-too-short": 2,
+      "stop-vs-end-pose": 1,
+      "arc-plus-turn": 1,
+      "ungated-light-claim": 1,
+      "cost-mismatch": 1,
+      "scope-conflict": 1,
+      "asset-claim-superseded": 6
+    },
+    "TARN_lint_regression_layout.md": {
+      "room-plan-unpinned": 1,
+      "plan-by-frame-only": 1,
+      "depth-order-unstated": 1,
+      "door-as-termination": 1,
+      "room-position-in-tight-frame": 1,
+      "absent-object-named": 1
+    }
+  },
+  "mutations": {
+    "TARN_lint_regression_v3faults.md": [
+      [
+        "negation-budget",
+        "There is no hard shadow anywhere, no beam, no motes, and nothing in the room is warmer than neutral. The air is not dusty. He is not lit from the side. Nothing brighter than the glass appears. No part of the frame is blown, and no surface is saturated. The greens are never emerald, never mint, never vivid. The whites are neither cream nor blue. He does not squint and he does not flinch. The camera does not retreat. The customers do not react and they are never frozen. Nothing else changes.",
+        "Every shadow edge is broad. The air is clean. He is lit from above."
+      ],
+      [
+        "beat-without-action",
+        "2.2\u20133.0s \u2014 a warm edge of light begins to build along the back of his neck. He does not notice.",
+        "2.2\u20133.0s \u2014 he turns the cup a quarter turn on the counter and lets go of it."
+      ],
+      [
+        "stop-vs-end-pose",
+        "4.5\u201312.0s \u2014 he begins to turn. He stops turning at 7.0s and stands where he is from then on.",
+        "4.5\u201312.0s \u2014 he turns, then walks forward and stops short of the glass."
+      ],
+      [
+        "stop-vs-end-pose",
+        "He stops turning at 7.0s and travels nowhere after it, though the camera goes on arcing.",
+        "He completes the turn, then walks forward as the camera holds."
+      ],
+      [
+        "cost-mismatch",
+        "12s \u00b7 42 cr draft",
+        "12s \u00b7 54 cr draft"
+      ],
+      [
+        "scope-conflict",
+        "and nothing in the frame is cooler, bluer, brighter or more saturated than the reference already is",
+        "and each named surface holds the reference's own temperature"
+      ],
+      [
+        "asset-claim-superseded",
+        "THE ROOM. @cafe_int supplies the counter with its deep green panelled front and a broad brass strip along its base. The frontage has one continuous horizontal glazing bar at two-thirds height, and each glazing bay is divided into four lights.",
+        "THE ROOM. @cafe_int supplies the counter with its plain flat green front and a broad brass strip along its top edge. Each glazing bay is four columns wide and two rows high."
+      ],
+      [
+        "asset-claim-superseded",
+        "The counter runs along the right-hand side of the frame with its dark wood top and brass base strip, and down the left side the green banquette with its marble tables.",
+        "The counter runs along the right-hand side of the frame, its broad brass strip along the TOP of its green front under the dark wood, above a plain recessed plinth."
+      ],
+      [
+        "asset-claim-superseded",
+        "THE FRONTAGE. Heavy green mullion posts stand between the bays, and one continuous horizontal glazing bar runs across at two-thirds height.",
+        "THE FRONTAGE. Heavy green mullion posts stand between the bays, and each bay is four columns wide and two rows high."
+      ]
+    ],
+    "TARN_lint_regression_layout.md": [
+      [
+        "room-plan-unpinned",
+        "At the LEFT of the frame stands the green door, seen obliquely from inside, with the lake through its glazed upper half.",
+        "The door is part of the frontage, at its left end, coplanar with the glazing bays, and that one continuous wall is perpendicular to the counter."
+      ],
+      [
+        "absent-object-named",
+        "; the handle is on the street side and stays out of sight from in here.",
+        ", and the letterplate is the only metal on it."
+      ],
+      [
+        "room-position-in-tight-frame",
+        "an opening in the shopfront at the LEFT END OF THE FRONTAGE, coplanar with the glazing bays.",
+        "its hinges on the side away from the lens."
+      ],
+      [
+        "door-as-termination",
+        "the green door closes the far end of that same wall, seen almost square on.",
+        "the green door is the last opening in that same run of glazing, in the same plane as the bays, seen at an angle."
+      ],
+      [
+        "depth-order-unstated",
+        "At the LEFT of the frame stands the green door, seen obliquely from inside, with the lake through its glazed upper half.",
+        "NEAREST THE LENS at the left of the frame stands the green door, with the glazing bays raking away behind it."
+      ],
+      [
+        "depth-order-unstated",
+        "So the run of glazing comes toward the lens along the RIGHT of the picture and ends in the green door, which stands right of centre seen at a three-quarter angle, with the narrow white brick corner just beyond it.",
+        "NEAREST THE LENS, filling the right edge of the picture, the glazing bays rake steeply away, and the green door is the FAR end of that same wall, about three metres off and closing the run."
+      ],
+      [
+        "plan-by-frame-only",
+        "At the LEFT of the frame stands the green door, seen obliquely from inside, with the lake through its glazed upper half.",
+        "The door is part of the frontage, at its left end, coplanar with the glazing bays, and that one continuous wall is perpendicular to the counter."
+      ]
+    ]
+  }
+}

@@ -174,7 +174,7 @@ def main():
     # a build order for nothing. Production changes the script as often as the
     # script changes production, so the two are compared rather than trusted.
     import re as _re
-    script = HERE / d.get("_script", "TARN_shot_script.md")
+    script = HERE / d["_script"] if d.get("_script") else P.files("script")
     if script.exists():
         in_script = set(_re.findall(r"^### SHOT ([0-9]+[A-Z]?) ", script.read_text(encoding="utf-8"), _re.M))
         for s_ in sorted(in_script - set(req)):

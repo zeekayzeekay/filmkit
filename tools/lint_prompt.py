@@ -1531,7 +1531,7 @@ def lint(title, body, context=""):
         f.append(("WARN", "direction-audit",
                   f"{sum(len(v) for v in dirs.values())} direction words — {summary}. "
                   "Each must be load-bearing or deleted. Look them up in "
-                  "tarn_facts.json > geometry; never re-derive them."))
+                  f"{P.PATH.name} > geometry; never re-derive them."))
 
     # -- sibling conformance: a rewritten paragraph must do what its neighbours do.
     f += sibling_conformance(body)

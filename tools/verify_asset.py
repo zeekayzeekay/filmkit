@@ -367,7 +367,7 @@ def main():
     compare_proof = None
     if div:
         import subprocess
-        cmd = [sys.executable, "compare_asset.py", a.tag, a.compared_with, "--property", a.prop]
+        cmd = [sys.executable, P.tool("compare_asset.py"), a.tag, a.compared_with, "--property", a.prop]
         r = subprocess.run(cmd, capture_output=True, text=True, cwd=str(HERE))
         out = (r.stdout or "") + (r.stderr or "")
         print(out)

@@ -39,7 +39,6 @@ Usage
   python3 stale_neighbours.py OLD.txt NEW.txt --quiet     # exit code only
 """
 import argparse, difflib, pathlib, re, sys
-import _project as P  # FK1: where the film is
 
 # Terms that make a surviving sentence WORTH READING. A sentence about grain or
 # colour rarely depends on where a man is standing; one about position,

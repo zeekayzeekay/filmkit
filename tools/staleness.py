@@ -42,9 +42,7 @@ ARCHIVE = HERE / "_archive"
 
 # Documents a reader is told to trust. If one of these cites an archived file
 # without the _archive/ prefix, the reader will follow it to something dead.
-LIVE_DOCS = ["OPERATING.md", "METHOD_SOURCES.md", "HANDOFF.md", "PORTABILITY.md",
-             "TARN_AUTHORITY_RECONCILIATION.md", "TARN_BUILD_PLAN.md",
-             "TARN_ELIGIBILITY.md", "TARN_shot_script.md", "GUARD_SELFTEST.md"]
+LIVE_DOCS = [p.name for p in P.files("live_docs")]
 
 CLAIMS_CURRENT = re.compile(r"\blive\b|\bfinal\b|\bselected\b|\bcurrent\b", re.I)
 
