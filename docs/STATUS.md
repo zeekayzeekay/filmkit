@@ -4,7 +4,7 @@
 |---|---|---|
 | FK0 | repo skeleton, both manifests, AGENTS.md | **done** |
 | FK1 | extract and de-TARN the fourteen guards | **done** |
-| FK2 | portability test, split the 74 findings | pending |
+| FK2 | portability test, split the 74 findings | **test done**, split pending |
 | FK3 | gate.py + self-gating tools | pending |
 | FK4 | engine.json, craft skills, look packs | pending |
 | FK5 | dual-run against TARN | pending |
@@ -39,3 +39,20 @@ stale · guard_coverage 56 rules / 55 proven / 1 exempt / 0 unproven · prefligh
 phases PASS · selections both current · crossshot and lint_prompt produce their expected
 output. The scratch film deliberately keeps the ORIGIN's filenames, so `_files` is proven
 rather than assumed.
+
+## FK2 result
+
+`tests/portability_test.py` — de-nouns the FILM as well as the fixture, because a lint
+rule reads both and stripping one side is a broken lookup rather than an experiment.
+
+**All 56 rules are general.** Nothing in the rule engine depends on one film's nouns, so
+the code side needs no split — the whole engine is the kit's. 73 of 74 finding `ask:`
+lines are portable as written; one names a facts-file section rather than a place.
+
+`--selftest` proves discrimination: the first method (fixture only) silences three
+ledger-reading rules, the current one silences none. Without that control, 56-of-56
+general is indistinguishable from a comparison that measures nothing.
+
+Also fixed in passing: `checklist.py` parsed `F-61b` as id `F-61` titled `b · …`,
+colliding with the real F-61 — in the tool whose whole purpose is that the checklist
+cannot disagree with the ledger.

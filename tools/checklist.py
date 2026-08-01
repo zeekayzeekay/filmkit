@@ -49,7 +49,13 @@ def findings():
     parts = re.split(r"\n## ", text)
     for p in parts[1:]:
         head = p.split("\n", 1)[0].strip()
-        m = re.match(r"(F-\d+|DECISION)\s*·?\s*(.*)", head)
+        # A finding may carry a letter suffix -- F-56b, F-61b, F-72b -- for a
+        # second lesson from the same fault. `F-\d+` swallowed the number and
+        # left the letter in the TITLE, so F-61b parsed as id "F-61" titled
+        # "b · CLOSES THE FAR END..." and collided with the real F-61. Two
+        # findings, one id, one mangled title, in the file whose whole purpose
+        # is that the checklist cannot disagree with the ledger.
+        m = re.match(r"(F-\d+[a-z]?|FK-\d+|DECISION)\s*·?\s*(.*)", head)
         if not m:
             continue
         fid, title = m.group(1), m.group(2)
