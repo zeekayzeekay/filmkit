@@ -7,7 +7,7 @@
 | FK2 | portability test, split the 74 findings | **test done**, split pending |
 | FK3 | gate.py + self-gating tools | **done** |
 | FK4 | engine.json, craft skills, look packs | **engine + skills done**, look packs pending |
-| FK5 | dual-run against TARN | pending |
+| FK5 | dual-run against TARN | **done** |
 | FK6 | promotion ritual, session state | pending |
 | FK7 | init, doctor, private GitHub repo | pending |
 
@@ -98,3 +98,12 @@ path differs (`.claude/skills` vs `.agents/skills`), and that is `filmkit-doctor
 kit_lint gains checks 10 (engine facts inside their expiry) and 11 (skills conform). Both
 proven to discriminate. Check 11 had a hole on first write: `description: ` with a trailing
 space parsed as one character and passed a `1 <= len` test.
+
+## FK5
+
+34 invocations, two copies of the origin film, line-by-line diff. All agree, with one
+declared expected difference (FK1's de-nouned direction-audit message).
+
+The gate was tested before being trusted: a changed threshold and a flipped return code
+were both MISSED by the first ten-invocation list, because no call reached those lines.
+See KIT_FINDINGS FK-08.

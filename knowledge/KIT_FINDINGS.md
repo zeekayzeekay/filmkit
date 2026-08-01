@@ -407,3 +407,64 @@ step reads as though it recorded the chain.
 **What is not encoded:** nothing verifies that a `verified:` line is true. It is a signed
 statement, like F-68's exemption and F-72's `is_master`, and its value is that the signature
 is now per-row and dated rather than one confident sentence at the top.
+
+---
+
+## FK-08 · A DIFFERENTIAL TEST COMPARES INVOCATIONS, NOT TOOLS
+
+<!-- guard: automatic  scope: process
+     ask: which code paths does this comparison actually reach — and which rules never fire on this film at all? -->
+
+**Cost:** none. Found by testing the acceptance gate instead of trusting it.
+
+`tests/dual_run.py` runs the origin project's own guard scripts and the kit's ported ones
+against two copies of one film and diffs every line. It reported **all ten tools identical**.
+
+That was worth almost nothing until it was checked, for two separate reasons.
+
+**First: I had been asserting the same thing all along, from memory.** Through the whole
+extraction I wrote things like *"checklist 74 findings, 32 manual, 0 untagged — matches its own
+run."* That is a number read off a screen, compared against a number remembered from earlier.
+It is precisely the method that produced six wrong divergence reports in the origin project,
+and precisely what `compare_asset.py` exists to replace. **Remembered numbers agree far more
+readily than outputs do** — a tool can print an identical summary line and differ in every
+finding above it.
+
+**Second, and worse: the gate could not see most changes.** Three deliberate mutations:
+
+| mutation | caught? |
+|---|---|
+| a trailing space in one message | no — and correctly so, the normaliser strips trailing whitespace |
+| **`verify_asset`'s 6% scale threshold, `0.06` → `0.60`** | **NO** |
+| **a `return 1` flipped to `return 0` in `staleness`** | **NO** |
+| one word changed in a shotmap finding message | yes |
+
+Neither miss was a bug in the comparison. **No invocation in the list reached either line.**
+`verify_asset` was called only as `--audit` and `--selftest`, never on the claim-recording path
+where that threshold lives; `staleness`'s `return 1` is on a failure branch this film does not
+take.
+
+> **Ten tools invoked is not ten tools compared. It is ten code paths compared, and a rule that
+> never fires on this film is a rule this gate never sees.**
+
+**Fix, in three parts.**
+
+*More invocations.* 34 rather than 10 — every tool in each of its modes, plus `lint_prompt` on
+every markdown file in the film, because that one tool holds 56 of the kit's rules and running
+it on one file reaches a fraction of them.
+
+*An honest report.* It no longer says "the extraction changed nothing". It says the extraction
+changed nothing **observable through these 34 calls**, names the two mutations an earlier list
+missed, and states that neither version is proven correct — only that they agree.
+
+*A declared expected-difference ledger.* Widening coverage immediately surfaced a real
+behavioural difference: FK1 removed a hard-coded project filename from `lint_prompt`'s
+direction-audit message, so it now names whichever facts file the film uses. That is an
+intended change, and the right handling is neither to fail forever nor to loosen the
+comparison. Each entry carries a sentence saying why the two versions *should* differ, the
+report prints them, and a difference not on the list still fails — **proven, by changing one
+more word on the same line and confirming it is caught.**
+
+**What is not encoded:** nothing measures coverage. There is no count of which lines these 34
+calls reach, so the honest claim is bounded by the list and the list is a judgement. A rule
+that fires only on a film nobody has shot yet is invisible to this gate and will stay invisible.
