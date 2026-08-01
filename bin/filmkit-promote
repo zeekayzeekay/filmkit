@@ -1,3 +1,147 @@
 #!/usr/bin/env python3
-"""filmkit-promote — implemented in FK7 (init, doctor) / FK6 (promote)."""
-raise SystemExit("not implemented yet")
+"""
+PROMOTE A LESSON OUT OF ONE FILM AND INTO THE KIT.
+
+    filmkit-promote F-63              propose it, and say what is missing
+    filmkit-promote F-63 --apply      copy it, once nothing is missing
+
+WHY THIS EXISTS
+---------------
+The origin project's `PORTABILITY.md` said: *"keep the generic findings, delete
+the film-specific evidence."* One sentence, describing a judgement call about
+seventy-odd items, made once, by a tired person, with nothing checking it.
+
+That is the shape of every recurrence this kit was built from. So promotion is a
+command with gates, not an intention.
+
+THE GATES
+---------
+1. the finding exists in this film's ledger and carries its metadata block
+2. its `ask:` names no proper noun belonging to this film
+3. it is not already in the kit
+4. it carries a **transferable rule** — the sentence that survives the evidence
+5. `--apply` bumps the kit's minor version, because a film pinned to the old one
+   must be able to tell that the rules moved
+
+WHAT IT CANNOT DO
+-----------------
+Decide whether the lesson is TRUE. A wrong general rule promotes exactly as
+cleanly as a right one. What it can do is refuse the ones that are secretly about
+one film, and make the rest carry their reason with them.
+"""
+import argparse, datetime, json, pathlib, re, sys
+
+KIT = pathlib.Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(KIT / "tools"))
+sys.path.insert(0, str(KIT / "tests"))
+
+
+def kit_findings():
+    f = KIT / "knowledge" / "FINDINGS.md"
+    return f, (f.read_text(encoding="utf-8") if f.exists() else "")
+
+
+def bump_minor():
+    out = []
+    for man in (KIT / ".claude-plugin" / "plugin.json", KIT / ".codex-plugin" / "plugin.json"):
+        d = json.loads(man.read_text(encoding="utf-8"))
+        maj, minor, *_rest = d["version"].split(".")
+        d["version"] = f"{maj}.{int(minor) + 1}.0"
+        man.write_text(json.dumps(d, indent=2) + "\n", encoding="utf-8")
+        out.append(d["version"])
+    return out[0]
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("finding_id")
+    ap.add_argument("--apply", action="store_true", help="actually move it")
+    a = ap.parse_args()
+
+    import _project as P
+    import checklist as C
+    import portability_test as PT
+
+    ledger = P.files("findings")
+    if not ledger.exists():
+        raise SystemExit(f"\n  ! this film has no findings ledger at {ledger.name}\n")
+    text = ledger.read_text(encoding="utf-8")
+
+    found = [f for f in C.findings() if f["id"] == a.finding_id]
+    if not found:
+        raise SystemExit(f"\n  ! {a.finding_id} is not in {ledger.name}. "
+                         f"checklist.py lists what is.\n")
+    f = found[0]
+
+    m = re.search(rf"\n## {re.escape(a.finding_id)}\b.*?(?=\n## |\Z)", text, re.S)
+    body = m.group(0) if m else ""
+
+    print(f"\n  PROMOTE {a.finding_id} — {f['title'][:64]}\n")
+    blockers = []
+
+    # ---- gate 1: tagged at all
+    if not f.get("guard") or not f.get("ask"):
+        blockers.append("no metadata block — a finding with no `ask:` is in nobody's process")
+    else:
+        print(f"  ok tagged {f['guard']} / {f['scope']}")
+
+    # ---- gate 2: the ask names no proper noun of this film
+    tags, words = PT.project_nouns()
+    ask = f.get("ask") or ""
+    hits = sorted({t for t in tags if t in ask} |
+                  {w for w in words if re.search(rf"\b{re.escape(w)}\b", ask, re.I)})
+    if hits:
+        blockers.append(f"its `ask:` names this film — {', '.join(hits)}. Rewrite the question "
+                        f"so it asks about any film, then promote.")
+    else:
+        print("  ok its `ask:` names no proper noun of this film")
+
+    # ---- gate 3: not already there
+    kf, ktext = kit_findings()
+    if re.search(rf"^## {re.escape(a.finding_id)}\b", ktext, re.M):
+        blockers.append(f"{a.finding_id} is already in knowledge/FINDINGS.md")
+    else:
+        print("  ok not already in the kit")
+
+    # ---- gate 4: it carries a transferable rule
+    rule = re.search(r"\*\*The transferable rule\.?\*\*\s*(.+?)(?:\n\n|\Z)", body, re.S)
+    if not rule:
+        blockers.append("no **The transferable rule.** paragraph. The evidence is about one "
+                        "film; the rule is what survives it, and a finding without one "
+                        "promotes a story rather than a lesson.")
+    else:
+        print(f"  ok carries a transferable rule\n     {' '.join(rule.group(1).split())[:92]}")
+
+    if blockers:
+        print(f"\n  \033[91mNOT PROMOTED — {len(blockers)} blocker(s)\033[0m\n")
+        for b in blockers:
+            print(f"    · {b}")
+        print("\n  Each of these is a reason the lesson would not survive the move intact.\n")
+        return 1
+
+    if not a.apply:
+        print("\n  \033[92mReady.\033[0m Re-run with --apply to move it and bump the kit's "
+              "minor version.\n")
+        return 0
+
+    stamp = datetime.date.today().isoformat()
+    entry = (f"\n---\n\n{body.strip()}\n\n"
+             f"*Copied from a film's ledger on {stamp} by `filmkit-promote`, which checked "
+             f"that its `ask:` names no proper noun of that film and that it carries a "
+             f"transferable rule. The EVIDENCE travels with it deliberately — one film's "
+             f"specifics are the reason the rule exists, and a rule without its reason gets "
+             f"switched off. The finding also stays in that film's own ledger; this is a copy, "
+             f"not a move.*\n")
+    kf.write_text((ktext.rstrip() + "\n" + entry) if ktext.strip() else entry.lstrip(),
+                  encoding="utf-8")
+    version = bump_minor()
+    print(f"\n  \033[92mPromoted.\033[0m knowledge/FINDINGS.md now carries {a.finding_id}.")
+    print(f"  Kit version bumped to {version} — a film pinned to the old one will be told "
+          f"the rules moved.")
+    print("  This is a COPY. The finding stays in the film's ledger, and its evidence")
+    print("  travels with it — a rule without its reason gets switched off.\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

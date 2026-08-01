@@ -8,7 +8,7 @@
 | FK3 | gate.py + self-gating tools | **done** |
 | FK4 | engine.json, craft skills, look packs | **engine + skills done**, look packs pending |
 | FK5 | dual-run against TARN | **done** |
-| FK6 | promotion ritual, session state | pending |
+| FK6 | promotion ritual, session state | **done** |
 | FK7 | init, doctor, private GitHub repo | pending |
 
 Kit version 0.1.0. Nothing in `../tarn` has been modified.
@@ -107,3 +107,18 @@ declared expected difference (FK1's de-nouned direction-audit message).
 The gate was tested before being trusted: a changed threshold and a flipped return code
 were both MISSED by the first ten-invocation list, because no call reached those lines.
 See KIT_FINDINGS FK-08.
+
+## FK6
+
+`hooks/session_start.py` puts the film's STATE into context at the start of every
+session — kit-vs-pin, fact_rev, locked assets, unanswered manual items, open decisions.
+Deliberately not a summary of the film: state is what changed, and a briefing nobody
+reads is worse than none, so it is capped at 40 lines. It fails silent, because unlike
+the spend gate it protects nobody and noise at session start is its own cost.
+
+`bin/filmkit-promote` replaces PORTABILITY.md's one sentence about keeping the generic
+findings with four gates. F-69 and F-71 are now in the kit; the version went 0.1.0 to
+0.3.0, one bump each, so a film pinned to the old one is told the rules moved.
+
+Most of the origin's 74 findings are BLOCKED, and that is the point — they carry no
+transferable rule, so they would promote a story rather than a lesson.
