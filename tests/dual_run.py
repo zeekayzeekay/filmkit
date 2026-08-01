@@ -34,11 +34,10 @@ WHAT A CLEAN RUN DOES NOT PROVE
 That either version is CORRECT. It proves they are the same, which is exactly
 what an extraction should be and no more.
 """
-import argparse, pathlib, re, shutil, subprocess, sys, tempfile
+import argparse, json, pathlib, re, shutil, subprocess, sys, tempfile
 
 KIT = pathlib.Path(__file__).resolve().parent.parent
 
-# (tool, args, needs_film_docs). Ordered cheapest first so a broken run fails early.
 # INVOCATIONS, not tools. A differential test compares the code paths its calls
 # reach, and nothing else. Proven: changing verify_asset's 6% scale threshold and
 # flipping a return code in staleness were both MISSED by the first version of
@@ -82,12 +81,18 @@ def lint_invocations(film):
 # Do not add an entry to make a red run go green. Add one when you can say, in a
 # sentence, why the two versions SHOULD differ.
 # ---------------------------------------------------------------------------
-EXPECTED = [
-    ("tarn_facts.json", None,
-     "FK1 removed a hard-coded project filename from lint_prompt's direction-audit "
-     "message, so it now names whichever facts file the film actually uses. The origin "
-     "says tarn_facts.json because that is the only film it could ever describe."),
-]
+def _expected():
+    """The ledger is DATA. It names a specific film's filenames, and the kit's own
+    lint refuses a project noun in code — correctly, since this gate is supposed
+    to work for any origin project, not the one it was written against."""
+    f = pathlib.Path(__file__).with_name("expected_differences.json")
+    if not f.exists():
+        return []
+    d = json.loads(f.read_text(encoding="utf-8"))
+    return [(x["from"], x.get("to"), x["why"]) for x in d.get("differences", [])]
+
+
+EXPECTED = _expected()
 
 
 def account_for(origin_line, kit_line, film_facts_name):
@@ -109,6 +114,16 @@ def normalise(text, *root_dirs):
         text = text.replace(str(pathlib.Path(d).resolve()), "<FILM>")
     text = re.sub(r"/tmp/[A-Za-z0-9_.-]+", "<TMP>", text)
     return [ln.rstrip() for ln in text.strip().splitlines()]
+
+
+def _origin_facts_name(d):
+    """Whatever filename the origin's own scripts hard-code for their facts file."""
+    names = {}
+    pat = re.compile(r"['\"]([A-Za-z0-9_]+_facts\.json)['\"]")
+    for f in sorted(d.glob("*.py")):
+        for m in pat.findall(f.read_text(encoding="utf-8")):
+            names[m] = names.get(m, 0) + 1
+    return max(names, key=names.get) if names else None
 
 
 def verify_sources(d):
@@ -138,6 +153,8 @@ def main():
     ap.add_argument("--origin-scripts", required=True)
     ap.add_argument("--film", required=True)
     ap.add_argument("--show", action="store_true", help="print the differing lines")
+    ap.add_argument("--origin-facts", help="the facts filename the origin's scripts hard-code. "
+                                           "Derived from their source when omitted.")
     a = ap.parse_args()
 
     origin = pathlib.Path(a.origin_scripts).resolve()
@@ -155,11 +172,17 @@ def main():
         shutil.copytree(film, b_dir)
         for f in origin.glob("*.py"):
             shutil.copy(f, a_dir / f.name)
-        # the origin resolved its facts by a project-specific filename
-        for cand in list(a_dir.glob("*_facts.json")):
-            if cand.name != "tarn_facts.json":
-                shutil.copy(cand, a_dir / "tarn_facts.json")
-                break
+        # The origin's tools hard-code THEIR film's facts filename — that is the
+        # very thing the extraction removed. Read it out of their source rather
+        # than assuming it. The first version knew exactly one film's filename,
+        # which is the defect this gate exists to prove was fixed.
+        origin_facts = a.origin_facts or _origin_facts_name(origin)
+        if origin_facts:
+            for cand in sorted(a_dir.glob("*_facts.json")):
+                if cand.name != origin_facts:
+                    shutil.copy(cand, a_dir / origin_facts)
+                    break
+            print(f"  origin resolves its facts as {origin_facts!r}\n")
 
         facts_name = next((c.name for c in sorted(b_dir.glob("*_facts.json"))), "film_facts.json")
         invocations = TOOLS + lint_invocations(a_dir)

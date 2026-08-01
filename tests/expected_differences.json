@@ -1,0 +1,13 @@
+{
+  "_what": "Differences between an origin project's own guard scripts and the kit's ported ones that the extraction MEANT to introduce. Each entry is signed for: it says why the two versions SHOULD differ. dual_run prints them, and still fails on any difference not listed.",
+  "_why_not_code": "These entries name a specific film's filenames, and the kit's own lint refuses a project noun in code. This is data about one comparison, so it lives in a file — the same treatment preflight's fixture corpus got.",
+  "_do_not": "Do not add an entry to turn a red run green. Add one when you can say, in a sentence, why the two versions should differ.",
+  "differences": [
+    {
+      "from": "tarn_facts.json",
+      "to": null,
+      "to_means": "null = substitute the film's own facts filename",
+      "why": "FK1 removed a hard-coded project filename from lint_prompt's direction-audit message, so it now names whichever facts file the film actually uses. The origin says tarn_facts.json because that is the only film it could ever describe."
+    }
+  ]
+}

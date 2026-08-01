@@ -33,7 +33,12 @@ TOOLS = KIT / "tools"
 def scripts():
     """Everything executable in the kit. hooks/gate.py was outside the first
     five checks entirely -- the one file whose correctness costs money."""
-    return sorted(TOOLS.glob("*.py")) + sorted((KIT / "hooks").glob("*.py"))
+    # tests/ was outside every check until FK5's review. The files that verify
+    # the kit are as capable of a bare sibling invocation or a hard-coded project
+    # noun as the files they verify -- and a broken verifier reports success.
+    return (sorted(TOOLS.glob("*.py"))
+            + sorted((KIT / "hooks").glob("*.py"))
+            + sorted((KIT / "tests").glob("*.py")))
 FAIL = []
 
 
@@ -65,7 +70,32 @@ for f in scripts():
 # 3. No project filename is hard-coded in CODE. Prose may name one as evidence;
 #    an expression may not depend on one.
 # ---------------------------------------------------------------------------
-PROJECT_NOUN = re.compile(r'["\'][^"\']*(?:tarn_facts|TARN_[A-Za-z0-9_]+\.md)[^"\']*["\']')
+# A project noun is defined STRUCTURALLY, not by listing one film's words. The
+# first version's pattern spelled out `tarn_facts` and `TARN_*.md`, which is the
+# same allow-list-of-dangers shape as the gate's first matcher — and it meant the
+# check proving the kit knows about no particular film was written knowing about
+# exactly one. It also flagged itself, which is how it was found.
+#
+# Generic instead: a facts file that is not the template's, or an upper-case
+# document name that is not one of the roles the kit itself defines.
+GENERIC_DOCS = {
+    "README.md", "SKILL.md", "AGENTS.md", "CLAUDE.md", "ARCHITECTURE.md", "STATUS.md",
+    "FINDINGS.md", "KIT_FINDINGS.md", "REVIEW_CHECKLIST.md", "RUN_RECORD.md",
+    "SHOT_SCRIPT.md", "PROMPTS.md", "GUARD_SELFTEST.md", "WORKFLOW.md", "OPERATING.md",
+    "HANDOFF.md", "PORTABILITY.md", "METHOD_SOURCES.md", "MEMORY.md",
+}
+# Facts filenames the KIT itself generates. film_facts.json is the template's;
+# shadow_facts.json is the de-nouned copy portability_test writes into a temp dir.
+# Neither names a film.
+GENERIC_FACTS = {"film_facts.json", "shadow_facts.json"}
+FACTS_LITERAL = re.compile(r"\b([A-Za-z0-9]+_facts\.json)\b")
+DOC_LITERAL = re.compile(r"\b([A-Z][A-Z0-9_]{3,}\.md)\b")
+
+
+def project_nouns_in(s):
+    hits = [m for m in FACTS_LITERAL.findall(s) if m not in GENERIC_FACTS]
+    hits += [m for m in DOC_LITERAL.findall(s) if m not in GENERIC_DOCS]
+    return hits
 for f in scripts():
     src = f.read_text(encoding="utf-8")
     try:
@@ -83,9 +113,11 @@ for f in scripts():
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
             if node.value in docstrings:
                 continue
-            if PROJECT_NOUN.search(f'"{node.value}"'):
+            hits = project_nouns_in(node.value)
+            if hits:
                 fail("hardcoded-project-noun", f"{f.name}:{node.lineno}",
-                     f"string literal names a specific film's file: {node.value[:60]!r}")
+                     f"string literal names a specific film's file ({', '.join(sorted(set(hits)))}): "
+                     f"{node.value[:60]!r}")
 
 # ---------------------------------------------------------------------------
 # 4. A tool imports _project IF AND ONLY IF it uses it. The first port added the

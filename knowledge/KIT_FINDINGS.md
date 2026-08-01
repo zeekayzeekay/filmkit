@@ -468,3 +468,55 @@ more word on the same line and confirming it is caught.**
 **What is not encoded:** nothing measures coverage. There is no count of which lines these 34
 calls reach, so the honest claim is bounded by the list and the list is a judgement. A rule
 that fires only on a film nobody has shot yet is invisible to this gate and will stay invisible.
+
+---
+
+## FK-09 · THE CHECK FOR "NO PROJECT NOUNS" WAS WRITTEN WITH ONE PROJECT'S NOUNS
+
+<!-- guard: automatic  scope: process
+     ask: does this detector define its target structurally, or by listing the instances that have already gone wrong? -->
+
+**Cost:** none. Found by pointing the kit's linter at the kit's own tests, which had been
+outside every check since the linter was written.
+
+`kit_lint` check 3 refuses a project filename in code. Its pattern was:
+
+```python
+PROJECT_NOUN = re.compile(r'["\'][^"\']*(?:tarn_facts|TARN_[A-Za-z0-9_]+\.md)[^"\']*["\']')
+```
+
+**The check that proves the kit knows about no particular film was written knowing about
+exactly one.** It would pass a second film's nouns silently, forever — and that is the same
+allow-list-of-dangers shape as F-56 and as the gate's first matcher. Three times now.
+
+**It flagged itself, which is how it was found.** The detector's own pattern is a string
+literal containing `tarn_facts`.
+
+**Fix — define it structurally.** A project noun is a facts filename that is not one the kit
+itself generates, or an upper-case document name that is not one of the document roles the kit
+defines. No film appears anywhere in the rule. Proven to fire on `seabird_facts.json` and
+`SEABIRD_SHOTS.md` — nouns from a film that does not exist — and to stay quiet otherwise.
+
+**Two more faults in the same pass, both in the acceptance gate itself.**
+
+`dual_run.py` hard-coded `tarn_facts.json` to set up the origin-side copy. **The gate whose
+purpose is proving one film's name was removed from the tools knew exactly one film's name.**
+It now reads the filename out of the origin scripts' own source — which is the very thing the
+extraction removed from them — with `--origin-facts` to override.
+
+And its expected-difference ledger was a Python list containing that filename. It is data about
+one comparison, so it is now `tests/expected_differences.json`, the same treatment preflight's
+fixture corpus got.
+
+**And the gate was not a gate.** `dual_run` ran only when somebody remembered to type it. It is
+now a phase of `tests/verify.py`, which runs it whenever both a real film and its origin
+scripts are given.
+
+**The transferable rule.** *A detector that lists instances guards the instances. Define the
+class.* Every time this has come up — F-56's counting allow-list, the gate's tool matcher, this
+— the fix was the same shape: stop naming what has gone wrong, and describe what wrong looks
+like.
+
+**What is not encoded:** the structural definition needs an allow-list of its own — the generic
+document names the kit legitimately uses. That list is a judgement, and a film that names a
+document `README.md` will not be caught.

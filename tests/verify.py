@@ -81,9 +81,11 @@ def fresh_film(root):
 
 
 def main():
-    real = None
+    real = origin_scripts = None
     if "--against" in sys.argv:
         real = pathlib.Path(sys.argv[sys.argv.index("--against") + 1]).resolve()
+    if "--origin-scripts" in sys.argv:
+        origin_scripts = pathlib.Path(sys.argv[sys.argv.index("--origin-scripts") + 1]).resolve()
 
     tmp, kit = clone_head()
     try:
@@ -124,6 +126,16 @@ def main():
                 cwd=real, name="portability test discriminates")
             run([sys.executable, str(kit / "tools" / "guard_coverage.py")], cwd=real,
                 name="every rule proven by a fixture")
+
+        if real and origin_scripts:
+            # The acceptance gate. It existed for one commit as a thing somebody
+            # had to remember to run, which is not a gate.
+            print("\n  ACCEPTANCE — the kit reproduces the origin project")
+            run([sys.executable, str(kit / "tests" / "dual_run.py"),
+                 "--origin-scripts", str(origin_scripts), "--film", str(real)],
+                cwd=kit, name="dual run against the origin's own scripts")
+        elif real:
+            print("\n  ACCEPTANCE — skipped: pass --origin-scripts DIR to run the dual run")
 
         print()
         if FAIL:
