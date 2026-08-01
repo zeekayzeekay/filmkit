@@ -74,6 +74,9 @@ def check_mutations():
     ok = True
     for f, cases in MUTATIONS.items():
         src = HERE / f
+        if not src.exists():
+            print(f"  -- {f} is not in this film; its repairs cannot be checked here")
+            continue
         original = src.read_text(encoding="utf-8")
         # group by rule: a fault stated N times needs all N repaired at once
         grouped = {}
@@ -112,7 +115,21 @@ def run(cmd):
 def check_fixtures():
     print("\n=== GUARDS — do the checks still fire?")
     ok = True
+    # A fixture the corpus names but this film does not have. The kit seeds the
+    # manifest from the origin project, so a NEW film names fixtures whose files
+    # live in someone else's directory -- and opening one was a traceback, in the
+    # phase whose whole purpose is proving the guards still fire. Report it as
+    # what it is: a rule nobody in THIS film has watched fire.
+    missing = [f for f in FIXTURES if not (HERE / f).exists()]
+    if missing:
+        print(f"  {len(missing)} fixture(s) named in the corpus are not in this film:")
+        for f in missing:
+            print(f"     -- {f}")
+        print("     Their rules are UNPROVEN here. Promote a neutral fixture into the kit")
+        print("     (bin/filmkit-promote) or write one for this film.")
     for f, expect in FIXTURES.items():
+        if f in missing:
+            continue
         _, out = run([sys.executable, P.tool("lint_prompt.py"), f])
         for rule, n in expect.items():
             got = len(re.findall(rf"\[(?:ERROR|WARN|CHECK)\] {re.escape(rule)}", out))

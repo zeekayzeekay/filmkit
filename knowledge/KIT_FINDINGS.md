@@ -304,3 +304,56 @@ fixture is now a real, minimal film; the selftest runs anywhere.
 operator has trusted it. An inert gate is indistinguishable from a permissive one from the
 inside — `filmkit-doctor` must report *registered* and *trusted* as two separate states, and
 until it exists that check is a habit.
+
+---
+
+## FK-06 · FIVE FAULTS, ONE HABIT — AND A COMMAND INSTEAD OF A RESOLUTION
+
+<!-- guard: automatic  scope: process
+     ask: was this verified from a clone, in a directory with no history, by running the process rather than the function? -->
+
+**Cost:** nothing directly. This finding exists because the previous five have one shape, and
+a shape repeated five times is not five mistakes, it is one missing check.
+
+| | what I verified | what mattered |
+|---|---|---|
+| FK-01 | the transfer tool's success report | the bytes |
+| FK-02 | the diff | the use sites |
+| FK-03 | the working copy | the deliverable |
+| FK-04 | the tool where its own outputs already sat | a clean directory |
+| FK-05 | the pure function | the process around it |
+
+**Each time I checked the artefact in front of me rather than the one that has to survive the
+trip.** The obvious response — review more carefully — is the one that cannot work, because the
+same habit does the reviewing. Four of these were found by accident: an absurd number, a
+question from the operator, an unrelated smoke test, and one deliberate probe.
+
+**Guard.** `tests/verify.py`. It never tests the working tree. It clones **HEAD** into a temp
+directory — so uncommitted work is excluded on purpose, because what is not committed is not
+delivered — builds a film from `templates/new-project`, and runs every suite from that clone.
+Uncommitted changes are listed, loudly, as *not verified*.
+
+The clean-film phase asserts something weaker than PASS and more useful: **the tools must RUN
+and report, never raise.** A brand-new film has no prompts, findings or assets, so nothing can
+pass; what must not happen is a traceback, because *a traceback is not a phase result* and the
+only place one surfaces is a directory where nothing has accumulated.
+
+**It found two on its first run, both in the first command a new user would type.**
+
+`checklist.py` opened the findings ledger unconditionally. A film that has not had its first
+fault yet has no ledger — the normal state of every new project — and the tool that derives the
+review checklist died with `FileNotFoundError`.
+
+`preflight.py` opened every fixture named in the corpus. The kit seeds that corpus from the
+origin project, so a new film names fixtures whose files are in **someone else's directory**,
+and the phase whose entire purpose is *proving the guards still fire* raised instead. It now
+reports them as what they are: rules nobody in **this** film has watched fire.
+
+**The transferable rule.** *Verify the delivered thing, from a clone, in a directory with no
+history, by running the process rather than the function.* Every one of the five would have
+been caught by that sentence, and none of them was caught by intending to be careful.
+
+**What is not encoded:** `verify.py` cannot say whether a rule is correct, whether the hosts
+invoke the hook, or whether the operator has trusted it. It also runs only when someone types
+it — there is no CI here. It is one command instead of five habits, which is progress, not a
+guarantee.

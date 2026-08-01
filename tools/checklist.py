@@ -44,6 +44,15 @@ META = re.compile(
 
 
 def findings():
+    # A film that has not had its first fault yet has no ledger. That is the
+    # NORMAL state of a new project, and it was a FileNotFoundError traceback --
+    # in the first command filmkit-init tells you to run. FK-04's class exactly:
+    # the tool had only ever been run in a directory where the file already was.
+    if not LEDGER.exists():
+        print(f"\n  no findings ledger at {LEDGER.name} — nothing to derive a checklist from.")
+        print("  That is correct for a film with no faults recorded yet. Write the first")
+        print("  finding when the first thing costs you something.\n")
+        return []
     text = LEDGER.read_text(encoding="utf-8")
     out = []
     parts = re.split(r"\n## ", text)
