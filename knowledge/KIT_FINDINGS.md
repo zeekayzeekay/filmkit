@@ -880,3 +880,47 @@ it after decoding, never before.**
 **What is not encoded:** the same class may still exist elsewhere in the kit wherever a path is
 matched against serialised text. `kit_lint` does not check for it, and I have not audited the
 remaining sites.
+
+
+---
+
+## FK-16 · THE DELIVERED KIT DID NOT PIN ITS LINE ENDINGS
+
+<!-- guard: automatic   scope: delivery
+     ask: what does a fresh clone of this look like on the OTHER platform, byte for byte? -->
+
+**What happened.** Checking the operator's clone over the desktop bridge before writing his
+next set of instructions, `git status` showed **56 files modified**. `git diff --stat` said
+10,661 insertions and 10,661 deletions. Content difference: none. Every file in the working
+tree had become CRLF.
+
+There is no `.gitattributes` in the repository, so nothing ever said what a line ending
+should be, and the answer was left to whatever each machine happened to do.
+
+**Three consequences, in rising order.**
+
+1. `git status` is unreadable — a real edit hides among 56 false ones.
+2. `git merge --ff-only` refuses. **The next kit update cannot be pulled**, and the reason
+   given is about local changes that do not exist.
+3. `tests/SOURCE_SHA256.txt` and `tests/fixtures/manifest.json` hash FILES. A line ending
+   is a byte. A manifest that disagrees with the working tree beside it is FK-01 arriving
+   by a different road — and this time it would arrive on the operator's machine, silently,
+   through no action of his.
+
+**Why it had not shown up.** `verify.py` clones HEAD, and the index is LF, so every
+verification run this week measured LF files and was correct about them. The working tree
+is the one artefact `verify.py` deliberately does not test. That is the right design, and
+it is exactly why the working tree needed a check of its own.
+
+**Fix.** `.gitattributes` pins `* text=auto eol=lf`, the two hash manifests are marked
+`-text` so they are byte-exact by declaration rather than by inference, and `kit_lint` fails
+on a missing pin or on any tracked script containing CRLF.
+
+**The transferable rule.** *A repository that does not say what a byte is has agreed to
+differ between machines.* Line endings, file mode, and text encoding are all in this
+category: silence is not a default, it is a delegation — and the party it delegates to is
+the platform you did not develop on.
+
+**What is not encoded:** the repair on an already-converted clone is manual —
+`git reset --hard`, or `git add --renormalize .` if there is real local work mixed in.
+Nothing in the kit detects or repairs a clone from the outside.

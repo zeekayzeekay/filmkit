@@ -1,0 +1,30 @@
+# LINE ENDINGS ARE PINNED, ON EVERY PLATFORM.
+#
+# Without this file a Windows clone can end up with CRLF in the working tree
+# while the index holds LF, and then EVERY tracked file reports as modified:
+# measured on the operator's machine, 56 files, 10,661 insertions and 10,661
+# deletions, and not one character of content different.
+#
+# Three things break, in rising order of seriousness:
+#   1. `git status` is useless, so a real edit hides among 56 false ones.
+#   2. `git merge --ff-only` refuses, and the next kit update cannot be pulled.
+#   3. tests/SOURCE_SHA256.txt and tests/fixtures/manifest.json hash FILES. A
+#      line ending is a byte. A manifest that disagrees with its own working
+#      tree is FK-01 arriving by a different road.
+#
+# This kit is Python, Markdown and JSON. It has no file that wants CRLF.
+* text=auto eol=lf
+
+# Anything hashed by a manifest is byte-exact by definition. Say so explicitly
+# rather than relying on `text=auto` guessing right.
+tests/SOURCE_SHA256.txt   -text
+tests/fixtures/manifest.json -text
+
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.webp binary
+*.mp4  binary
+*.mov  binary
+*.zip  binary
+*.pdf  binary

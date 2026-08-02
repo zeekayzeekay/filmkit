@@ -374,6 +374,31 @@ for _f in scripts():
              "its own streams, so its stdout encoding comes from the host locale. On Windows "
              "that is cp1252 for a pipe, and the process dies partway through its report.")
 
+# --------------------------------------------------------------------------
+# LINE ENDINGS ARE PINNED, AND EVERY TRACKED TEXT FILE OBEYS.
+#
+# Measured on the operator's Windows machine: 56 files reported modified,
+# 10,661 insertions, 10,661 deletions, zero characters of content different.
+# `git status` becomes unreadable, `git merge --ff-only` refuses, and the two
+# hash manifests in this repo disagree with the files beside them -- because a
+# line ending is a byte and a manifest hashes bytes.
+# --------------------------------------------------------------------------
+_ga = KIT / ".gitattributes"
+if not _ga.exists():
+    fail("no-gitattributes", ".gitattributes",
+         "missing. Without it a Windows clone reports every tracked file as modified "
+         "and the next update cannot be fast-forwarded. Pin it: * text=auto eol=lf")
+elif "eol=lf" not in _ga.read_text(encoding="utf-8"):
+    fail("gitattributes-no-eol", ".gitattributes",
+         "exists but pins no eol. text=auto alone still lets a platform decide.")
+
+for _f in scripts():
+    if b"\r\n" in _f.read_bytes():
+        fail("crlf-in-tracked-file", f"{_f.parent.name}/{_f.name}",
+             "contains CRLF. The repo pins LF; a CRLF file here means the working tree "
+             "was converted after checkout, and every hash manifest that covers it is "
+             "now wrong. Fix with: git add --renormalize .")
+
 
 def main():
     # Count what is CHECKED, not what lives in tools/. The line said "16 tools"
@@ -394,7 +419,8 @@ def main():
         print("           tracked · no empty directories · no env var in a hook")
         print("           registration · kit docs name no missing file · engine facts")
         print("           still inside their expiry · skills conform to the open spec ·")
-        print("           every capturing subprocess call pins its encoding.\n")
+        print("           every capturing subprocess call pins its encoding · line")
+        print("           endings pinned to LF and no tracked file carrying CRLF.\n")
         print("  NOT checked: whether a rule is CORRECT, whether a threshold is right for")
         print("  your film, or whether a tool does what its docstring claims.\n")
         return 0
