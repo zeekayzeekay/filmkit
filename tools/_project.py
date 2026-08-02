@@ -263,7 +263,15 @@ def cfg(key, default):
 
 
 def save(d):
-    _resolve()["PATH"].write_text(json.dumps(d, indent=2), encoding="utf-8")
+    """Rewrite the facts file, changing nothing that was not asked for.
+
+    A whole-file rewrite is how a one-key edit turns into a diff nobody can
+    read. Keep the file's own trailing-newline convention -- the origin
+    project's facts file has none, and adding one made every tool that hashes
+    it report a change that was not one."""
+    path = _resolve()["PATH"]
+    nl = path.read_text(encoding="utf-8").endswith("\n") if path.exists() else True
+    path.write_text(json.dumps(d, indent=2) + ("\n" if nl else ""), encoding="utf-8")
 
 
 def load():

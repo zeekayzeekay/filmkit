@@ -120,6 +120,15 @@ def main():
                   f"resolved role(s).\n")
         return 1 if ambiguous else 0
 
+    # A COPY FIRST. This is the first thing the kit ever writes into a film that
+    # predates it, and a facts file is the one artefact a film cannot be rebuilt
+    # without. The backup is not in *_facts.json shape, so it cannot be mistaken
+    # for a second film by the resolver.
+    backup = P.PATH.with_suffix(".json.pre-adopt")
+    if not backup.exists():
+        backup.write_bytes(P.PATH.read_bytes())
+        print(f"\n  copied {P.PATH.name} -> {backup.name} before touching it")
+
     facts = P.load()
     block = dict(facts.get("_files", {}))
     block.update(resolved)
