@@ -569,3 +569,52 @@ skipped.* Widening the pattern fixes today's case; reporting the remainder fixes
 **What is not encoded:** the heading must still carry a metadata block to be noticed. A finding
 with neither a recognisable id nor a metadata block is indistinguishable from an ordinary
 section heading, and nothing can tell them apart.
+
+---
+
+## FK-11 · THE GATE INVOKED ITS INTERPRETER BY NAME
+
+<!-- guard: automatic  scope: process
+     ask: does anything in the enforcement path require a LOOKUP — a PATH entry, an environment variable, a default — that could resolve to nothing? -->
+
+**Cost:** none, caught by testing a thing I had built and never exercised: whether the matcher
+in the installed registration would actually match a real tool name.
+
+It does. But the line above it read:
+
+```json
+"command": "python3 \"/root/filmkit/hooks/gate.py\""
+```
+
+The script path was absolute — FK-03 saw to that, after the guessed `$CODEX_PLUGIN_ROOT`. The
+**interpreter** was not. `python3` is a PATH lookup, and on Windows — where this kit is meant to
+run — `python3` is frequently not a command at all. The host would run it, it would fail, and
+**a hook that fails lets the call through.**
+
+Same fault as the guessed environment variable, one layer down, and it survived the fix for the
+variable because I was looking at the part I had just been burned by.
+
+> **Any lookup in the enforcement path is a way for the gate to become silently absent.**
+> An environment variable that does not expand, a PATH entry that resolves to nothing, a
+> default that differs by platform — each of them fails, and every failure fails open.
+
+**Fix.** `--install` now writes the absolute path of the interpreter that is running it, so the
+command needs neither a variable nor a PATH lookup. `filmkit-doctor` **refuses** a registration
+whose command invokes `python`, `python3` or `py` by name, with the reason.
+
+**And the thing that found it is worth more than the fix.** I had never checked that the
+matcher matched. A wrong regex there makes the whole gate inert while every other check in the
+kit reports green — the registration present, the script correct, the receipt logic sound, and
+nothing ever invoked. The doctor's selftest now asserts the installed matcher catches
+`generate_video`, `generate_3d` and `apps_invoke`, and ignores another server's tools and
+`Bash`.
+
+**The transferable rule.** *Test the connection, not the ends.* Both ends of this were verified
+repeatedly. The wire between them — a regex and a command string, written once and never
+run — was the only part that could silently disconnect, and it was the only part nothing tested.
+
+**What is not encoded:** whether either host actually reads these files, or parses the extra
+`_generated_by` key without complaint. Neither is knowable from in here. The registration is
+also machine-specific by design — absolute paths mean a film shared across machines needs
+`filmkit-doctor --install` on each, which doctor detects and reports as "points at a different
+kit".

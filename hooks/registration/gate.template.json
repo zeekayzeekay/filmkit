@@ -1,5 +1,5 @@
 {
-  "_generated_by": "filmkit-doctor --install \u2014 do not hand-edit; __GATE_PATH__ is a placeholder",
+  "_generated_by": "filmkit-doctor --install \u2014 do not hand-edit. __GATE_PATH__ and __PYTHON__ are placeholders; both are filled with ABSOLUTE paths so the command needs neither an environment variable nor a PATH lookup.",
   "hooks": {
     "PreToolUse": [
       {
@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"__GATE_PATH__/gate.py\"",
+            "command": "\"__PYTHON__\" \"__GATE_PATH__/gate.py\"",
             "timeout": 30,
             "statusMessage": "filmkit: checking preflight receipt"
           }
@@ -20,7 +20,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"__GATE_PATH__/session_start.py\"",
+            "command": "\"__PYTHON__\" \"__GATE_PATH__/session_start.py\"",
             "timeout": 30,
             "statusMessage": "filmkit: loading project state"
           }

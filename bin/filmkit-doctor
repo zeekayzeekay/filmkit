@@ -69,7 +69,15 @@ def find_film(start="."):
 def registration(gate_dir):
     tmpl = json.loads((KIT / "hooks" / "registration" / "gate.template.json")
                       .read_text(encoding="utf-8"))
-    body = json.dumps(tmpl).replace("__GATE_PATH__", str(gate_dir).replace("\\", "\\\\"))
+    # ABSOLUTE interpreter as well as absolute script. The template used to say
+    # `python3`, which is a PATH LOOKUP — and on Windows `python3` frequently is
+    # not a command at all. The hook would fail, and a hook that fails LETS THE
+    # CALL THROUGH. Same fault as the guessed plugin-root variable, one layer
+    # down: any lookup in the enforcement path is a way for the gate to become
+    # silently absent.
+    body = (json.dumps(tmpl)
+            .replace("__GATE_PATH__", str(gate_dir).replace("\\", "\\\\"))
+            .replace("__PYTHON__", str(pathlib.Path(sys.executable)).replace("\\", "\\\\")))
     d = json.loads(body)
     d["_generated_by"] = ("filmkit-doctor --install. Absolute paths, no environment variable: "
                           "a hook command that fails to expand is a hook FAILURE, and a hook "
@@ -130,7 +138,13 @@ def check(film, facts_path, r):
                 continue
             try:
                 txt = path.read_text(encoding="utf-8")
-                if "$" in txt:
+                import re as _re
+                if _re.search(r'"command":\s*"(python3?|py)\b', txt):
+                    r.add(BAD, f"{host}: registration invokes the interpreter by NAME",
+                          "That is a PATH lookup. On a machine where it resolves to nothing\n"
+                          "the hook fails, and a hook failure LETS THE CALL THROUGH.\n"
+                          "Re-run --install to write an absolute interpreter path.")
+                elif "$" in txt:
                     r.add(BAD, f"{host}: registration interpolates an environment variable",
                           "A command that fails to expand is a hook FAILURE, and a hook\n"
                           "failure LETS THE CALL THROUGH. Re-run --install.")
@@ -224,9 +238,25 @@ def selftest():
 
         for path in (film / ".claude" / "settings.json", film / ".codex" / "hooks.json"):
             txt = path.read_text(encoding="utf-8")
-            g = "$" not in txt and "__GATE_PATH__" not in txt
+            import re as _re
+            g = ("$" not in txt and "__GATE_PATH__" not in txt and "__PYTHON__" not in txt
+                 and not _re.search(r'"command":\s*"(python3?|py)\b', txt))
             ok &= g
-            print(f"  {'ok ' if g else '!! '}{path.name}: no variable, no placeholder")
+            print(f"  {'ok ' if g else '!! '}{path.name}: no variable, no placeholder, "
+                  f"no PATH lookup")
+        # the matcher must actually MATCH. A gate with a regex that misses is
+        # inert, and every other check in here would still report green.
+        reg = _json.loads((film / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+        mrx = _re.compile(reg["hooks"]["PreToolUse"][0]["matcher"])
+        for tool, want in (("mcp__higgsfield__generate_video", True),
+                           ("mcp__higgsfield__generate_3d", True),
+                           ("mcp__higgsfield__apps_invoke", True),
+                           ("mcp__Gmail__search_threads", False),
+                           ("Bash", False)):
+            got = bool(mrx.search(tool))
+            ok &= got == want
+            print(f"  {'ok ' if got == want else '!! '}matcher {'catches' if want else 'ignores'}"
+                  f" {tool}")
 
     print()
     print("  \033[92mAll cases pass.\033[0m" if ok else "  \033[91mFAILED.\033[0m")
