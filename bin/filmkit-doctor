@@ -258,6 +258,34 @@ def check(film, facts_path, r):
     # is not gated by it. That is not a defect in the hook; it is the boundary of
     # what a per-project file can do, and it was not written down anywhere until
     # a generation could have been fired from an ungated surface.
+    if film:
+        s = film / ".claude" / "settings.json"
+        asked = []
+        if s.exists():
+            try:
+                asked = ((json.loads(s.read_text(encoding="utf-8")).get("permissions") or {})
+                         .get("ask") or [])
+            except Exception:
+                asked = []
+        if any("higgsfield" in x for x in asked):
+            r.add(OK, "permissions.ask covers the whole generation server",
+                  "Enforced by the host, needs no trust step. It cannot read a receipt, so\n"
+                  "it cannot replace the hook — it is what still holds if the hook does not\n"
+                  "run in some surface.")
+        else:
+            r.add(BAD, "no permissions.ask rule for the generation server",
+                  "The hook is the only thing standing between a prompt and a spend, and it\n"
+                  "needs to be trusted, loaded AND consulted. Add the second mechanism:\n"
+                  "  filmkit-doctor --install")
+
+    if film and (film / ".filmkit" / "CANARY").exists():
+        r.add(WARN, "CANARY ARMED — one free call is being refused on purpose",
+              "Ask your host for a Higgsfield balance check. Being REFUSED is the proof\n"
+              "that the host consults this gate before running a Higgsfield tool, which\n"
+              "is the one thing /hooks cannot tell you. Being ANSWERED means the hook is\n"
+              "registered and not consulted — the exact failure this kit exists to catch.\n"
+              "Then turn it off:  filmkit-doctor --canary off")
+
     r.add(WARN, "this gate covers a host that OPENS THIS FOLDER, and nothing else",
           "Any assistant session with the same generation tools attached but a\n"
           "different working directory — a cloud session, another machine, a chat\n"
@@ -294,7 +322,33 @@ def install(film, r):
                 except Exception:
                     existing = {}
             existing["hooks"] = reg["hooks"]
+            # ---- A SECOND MECHANISM, DELIBERATELY NOT THE SAME KIND ----------
+            # The hook is conditional: it reads a receipt and can say yes. That
+            # is what makes it useful and also what makes it fragile -- it has to
+            # be trusted, loaded and consulted, and a surface where any of those
+            # is false looks exactly like a surface where all three are true.
+            #
+            # `permissions.ask` is unconditional and is enforced by the host
+            # itself. It cannot check a receipt, so it cannot replace the hook.
+            # What it can do is make every call to this server stop and ask a
+            # person -- which is the operator's own standing rule, written as a
+            # rule instead of a promise.
+            #
+            # The pattern is the WHOLE SERVER, not a list of spending tools. F-56
+            # and the gate's own docstring: a guard whose reach is an allow-list
+            # only ever guards what has already gone wrong once. The cost is a
+            # prompt on a balance check. That is the correct price.
+            perms = existing.get("permissions") or {}
+            ask = [x for x in (perms.get("ask") or []) if x != "mcp__higgsfield__*"]
+            ask.append("mcp__higgsfield__*")
+            perms["ask"] = ask
+            existing["permissions"] = perms
             existing["_filmkit"] = reg["_generated_by"]
+            existing["_filmkit_permissions"] = (
+                "permissions.ask on the whole generation server. The hook can say YES on a "
+                "valid receipt; this cannot, and is not meant to. It is the belt: enforced by "
+                "the host, needs no trust step, and survives a surface where the hook does "
+                "not run. See FK-19.")
             path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
         else:
             path.write_text(json.dumps(reg, indent=2) + "\n", encoding="utf-8")
@@ -410,6 +464,9 @@ def selftest():
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--canary", choices=("on", "off"),
+                    help="arm or disarm the live proof that the HOST consults the gate. "
+                         "While armed, one free zero-cost call is refused.")
     ap.add_argument("--install", action="store_true",
                     help="write the hook registrations into this film")
     ap.add_argument("--selftest", action="store_true")
@@ -419,6 +476,31 @@ def main():
 
     print("\n  FILMKIT DOCTOR\n")
     film, facts_path = find_film()
+    if a.canary:
+        if film is None:
+            print("  ! --canary needs a film. Run it from inside one.\n")
+            return 1
+        marker = film / ".filmkit" / "CANARY"
+        if a.canary == "on":
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text("armed\n", encoding="utf-8")
+            print("  CANARY ARMED.\n")
+            print("  Now ask your host — Claude Code, Codex — for a Higgsfield BALANCE check.")
+            print("  It costs nothing either way, and the two outcomes mean opposite things:\n")
+            print("    REFUSED   the host consulted this gate before running a Higgsfield")
+            print("              tool. That is the thing /hooks cannot tell you, and it is")
+            print("              now proven for this host, in this folder.")
+            print("    ANSWERED  the registration exists and the host did not consult it.")
+            print("              An inert gate that looks exactly like a working one — the")
+            print("              failure this whole kit was built to catch.\n")
+            print("  Then:  filmkit-doctor --canary off\n")
+        else:
+            if marker.exists():
+                marker.unlink()
+                print("  CANARY DISARMED. The balance is free again.\n")
+            else:
+                print("  CANARY was not armed. Nothing to do.\n")
+        return 0
     r = Report()
     check(film, facts_path, r)
     if a.install:
