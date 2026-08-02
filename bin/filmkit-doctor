@@ -218,8 +218,11 @@ def check(film, facts_path, r):
             r.add(OK if n else WARN, f"{host}: {n} skill(s) visible at {rel}")
         else:
             import os as _os
-            how = (f'mklink /D "{target}" "{KIT / "skills"}"   (cmd, as Administrator '
-                   f'or with Developer Mode on)' if _os.name == "nt"
+            # /J, a directory junction: no elevation, no Developer Mode, same
+            # effect for a local directory. /D needs one or the other, and a
+            # remedy that needs an administrator prompt does not get run.
+            how = (f'mklink /J "{target}" "{KIT / "skills"}"   (cmd, no elevation needed)'
+                   if _os.name == "nt"
                    else f"ln -s {KIT / 'skills'} {target}")
             r.add(WARN, f"{host}: no {rel}",
                   f"Skills live in the kit at skills/. Link them:\n{how}\n"

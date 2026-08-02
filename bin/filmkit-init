@@ -117,8 +117,13 @@ def main():
                 # quietly making a copy that will drift.
                 print(f"  !! could not link {rel} ({e}).")
                 if os.name == "nt":
-                    print(f'     Windows needs Developer Mode or an elevated shell:')
-                    print(f'       mklink /D "{link}" "{KIT / "skills"}"')
+                    # A JUNCTION, not /D. A directory junction needs neither
+                    # elevation nor Developer Mode and does the same job for a
+                    # local directory -- and advice that needs an administrator
+                    # prompt is advice people skip, which leaves the skills
+                    # unlinked and the host loading nothing.
+                    print(f'     Windows, from cmd (no elevation needed):')
+                    print(f'       mklink /J "{link}" "{KIT / "skills"}"')
                 else:
                     print(f"       ln -s {KIT / 'skills'} {link}")
                 print("     Do NOT copy them — a copy is a fork, and the kit is the single "
