@@ -39,7 +39,8 @@ sys.path.insert(0, str(KIT / "tools"))
 import _utf8  # noqa: F401,E402
 
 FACTS = {"_fact_rev": 1, "kit_version": None, "look_pack": None,
-         "assets": {"@real_one": {}, "@real_two": {}},
+         "assets": {"@real_one": {}, "@real_two": {}, "@retired_one": {}},
+         "element_rules": {"retired_tags": {"_why": "fixture", "@retired_one": "x"}},
          "_files": {"prompts": "PROMPTS.md", "findings": "FINDINGS.md",
                     "script": "SHOT_SCRIPT.md", "selftest": "GUARD_SELFTEST.md",
                     "checklist": "REVIEW_CHECKLIST.md", "run_record": "RUN_RECORD.md",
@@ -74,6 +75,24 @@ CASES = [
     ("a file-level DONE with no produced: is one violation, not three",
      "<!-- status: DONE -->\n\n# One\nbody\n\n# Two\nbody\n\n# Three\nb\n",
      "names nothing it produced"),
+    ("ABANDONED naming a target and a reason is accepted",
+     "# Ran, nothing kept\n<!-- status: ABANDONED targeted: @gone why: the tag was retired -->\nb\n",
+     None),
+    ("ABANDONED naming a RETIRED registered tag is accepted",
+     "# Ran, nothing kept\n<!-- status: ABANDONED targeted: @retired_one why: retired -->\nb\n",
+     None),
+    ("ABANDONED naming a LIVE registered asset is refused — it succeeded",
+     "# Ran, nothing kept\n<!-- status: ABANDONED targeted: @real_one why: retired -->\nb\n",
+     "IS a registered asset"),
+    ("ABANDONED with no target is refused",
+     "# Ran, nothing kept\n<!-- status: ABANDONED why: it did not work -->\nb\n",
+     "names nothing it was aiming at"),
+    ("ABANDONED with no reason is refused",
+     "# Ran, nothing kept\n<!-- status: ABANDONED targeted: @gone -->\nb\n",
+     "with no  why:"),
+    ("a tag mentioned only in why: is not counted as a target",
+     "# Ran, nothing kept\n<!-- status: ABANDONED targeted: @gone why: replaced by @real_one -->\nb\n",
+     None),
     ("a heading with no marker anywhere is still refused",
      "# Bare\nbody\n",
      "heading has no status marker"),
@@ -94,7 +113,7 @@ def run_case(body):
 
 def main():
     ok = True
-    print("\n  BLOCK STATUS — LIVE / DRAFT / SUPERSEDED / DONE / INFO\n")
+    print("\n  BLOCK STATUS — LIVE / DRAFT / SUPERSEDED / DONE / ABANDONED / INFO\n")
     for name, body, want in CASES:
         out, rc = run_case(body)
         if "Traceback" in out:

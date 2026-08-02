@@ -24,6 +24,9 @@ WHAT THIS ENFORCES
                    future work gets mislabelled superseded and quietly disappears.
        SUPERSEDED  replaced by something else, which it must NAME
        DONE        it RAN, it produced registered assets, and nothing replaced it
+       ABANDONED   it RAN and produced nothing the ledger kept. Names what it was
+                   aiming at, and why. Neither DONE nor SUPERSEDED: nothing was
+                   registered and nothing replaced it.
        INFO        not a prompt
      A file-level marker above the first heading applies to the whole file, and a
      heading with its own marker overrides it.
@@ -49,7 +52,8 @@ Usage
 Status comment shapes:
   <!-- status: LIVE role: k5_start -->
   <!-- status: SUPERSEDED by: `k5-28` -->
-  <!-- status: DONE produced: @tarn_view_alt_1, @tarn_reverse_view -->
+  <!-- status: DONE produced: @asset_one, @asset_two -->
+  <!-- status: ABANDONED targeted: @asset_three why: the tag carried a face stamp and was retired -->
 """
 import json, pathlib, re, sys
 import _project as P  # FK1: where the film is
@@ -71,6 +75,28 @@ CLAIMS_CURRENT = re.compile(r"\blive\b|\bfinal\b|\bselected\b|\bcurrent\b", re.I
 # off.
 CLAIMS_RUNNING = re.compile(r"\blive\b|\bcurrent\b", re.I)
 TAG = re.compile(r"@[A-Za-z0-9_]+")
+
+
+def attr_tags(attrs, key):
+    """Tags belonging to ONE attribute, not every tag in the comment.
+
+    `<!-- status: ABANDONED targeted: @a why: superseded by @b -->` names @b in
+    its reason, and counting that as a target would make the check assert
+    something nobody wrote. Read the segment up to the next `word:` and stop."""
+    m = re.search(rf"\b{key}:\s*(.*?)(?=\s+[a-z_]+:|$)", attrs or "")
+    return TAG.findall(m.group(1)) if m else []
+
+
+def retired_in(facts):
+    """Tags this film has retired, if it keeps such a list.
+
+    Returns None when the film has no retired-tag section at all -- which is not
+    the same as an empty one, and the caller says so rather than treating an
+    absent list as 'nothing is retired'."""
+    sec = (facts.get("element_rules") or {}).get("retired_tags")
+    if sec is None:
+        return None
+    return {k for k in (sec if isinstance(sec, dict) else sec) if str(k).startswith("@")}
 
 
 def blocks():
@@ -148,9 +174,9 @@ def main():
         if s in ("SUPERSEDED", "INFO", "DRAFT") and CLAIMS_CURRENT.search(h):
             bad.append(f"a {s} heading still calls itself live/final/selected — this is the "
                        f"exact trap that put two edits in the wrong block: {h[:70]!r}")
-        if s == "DONE" and CLAIMS_RUNNING.search(h):
-            bad.append(f"{fn}: a DONE heading still calls itself live or current — it ran and "
-                       f"finished: {h[:70]!r}")
+        if s in ("DONE", "ABANDONED") and CLAIMS_RUNNING.search(h):
+            bad.append(f"{fn}: a {s} heading still calls itself live or current — it ran "
+                       f"and is finished with: {h[:70]!r}")
         if s == "SUPERSEDED" and "by:" not in a and not inherited:
             bad.append(f"{fn}: SUPERSEDED block does not name its replacement: {h[:70]!r}")
 
@@ -158,9 +184,8 @@ def main():
     # The whole value of DONE over SUPERSEDED is that it carries evidence. A DONE
     # block naming nothing, or naming a tag that was never registered, is the
     # escape hatch this status would otherwise be.
-    _assets = set()
-    if FACTS.exists():
-        _assets = set(json.loads(FACTS.read_text(encoding="utf-8")).get("assets", {}))
+    _facts_doc = json.loads(FACTS.read_text(encoding="utf-8")) if FACTS.exists() else {}
+    _assets = set(_facts_doc.get("assets", {}))
     _seen_done = set()
     for fn, h, s, a, inherited in blks:
         if s != "DONE":
@@ -170,7 +195,7 @@ def main():
             continue
         _seen_done.add(key)
         where = f"{fn}: the whole file" if inherited else f"{fn}: {h[:60]!r}"
-        named = TAG.findall(a or "")
+        named = attr_tags(a, "produced")
         if "produced:" not in (a or "") or not named:
             bad.append(f"{where} is marked DONE and names nothing it produced. "
                        f"Add  produced: @tag[, @tag]  — DONE without evidence is "
@@ -181,6 +206,43 @@ def main():
             bad.append(f"{where} is marked DONE and claims to have produced "
                        f"{', '.join(unknown)}, which the ledger does not have. A finished "
                        f"prompt is finished because its output was REGISTERED.")
+
+    # ---- ABANDONED must name what it aimed at, and be wrong about none of it --
+    # A prompt that RAN and produced nothing the ledger kept is neither DONE
+    # (nothing was registered) nor SUPERSEDED (nothing replaced it). Without a
+    # word for it the honest options are to mislabel it or to leave it unmarked,
+    # and both were on offer in the origin project: two of its four prompt
+    # ledgers aimed at tags that were later retired, and both carried a header
+    # copied from the one file that DID produce something.
+    #
+    # The check that makes this a status and not a shrug: a targeted tag that is
+    # a LIVE registered asset means the block succeeded and is mislabelled.
+    _retired = retired_in(_facts_doc)
+    for fn, h, s, a, inherited in blks:
+        if s != "ABANDONED":
+            continue
+        key = fn if inherited else (fn, h)
+        if key in _seen_done:
+            continue
+        _seen_done.add(key)
+        where = f"{fn}: the whole file" if inherited else f"{fn}: {h[:60]!r}"
+        aimed = attr_tags(a, "targeted")
+        if not aimed:
+            bad.append(f"{where} is marked ABANDONED and names nothing it was aiming at. "
+                       f"Add  targeted: @tag[, @tag]  — otherwise the record says a prompt "
+                       f"failed without saying at what.")
+        if "why:" not in (a or ""):
+            bad.append(f"{where} is marked ABANDONED with no  why:  — the reason a prompt "
+                       f"produced nothing usable is the only part of it still worth reading.")
+        for x in aimed:
+            if x in _assets and (_retired is None or x not in _retired):
+                bad.append(f"{where} is marked ABANDONED but {x} IS a registered asset. "
+                           f"Either it succeeded and this is DONE, or {x} should be in the "
+                           f"film's retired-tag list.")
+        if aimed and _retired is None:
+            bad.append(f"{where}: this film keeps no element_rules.retired_tags, so nothing "
+                       f"can confirm {', '.join(aimed)} were abandoned rather than forgotten. "
+                       f"Add the section, even empty.")
 
     # A file declared SUPERSEDED as a whole must say so once, and say what
     # replaced it once. Once, not per heading.
