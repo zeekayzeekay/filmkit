@@ -618,3 +618,88 @@ run — was the only part that could silently disconnect, and it was the only pa
 also machine-specific by design — absolute paths mean a film shared across machines needs
 `filmkit-doctor --install` on each, which doctor detects and reports as "points at a different
 kit".
+
+---
+
+## FK-12 · THE ACCEPTANCE GATE WAS RUN AGAINST A FILM THAT DOES NOT EXIST
+
+<!-- guard: automatic   scope: process
+     ask: name the artefact each gate you ran actually measured, and say how you know it was the one that ships -->
+
+**What happened.** `dual_run.py` reported *"All 34 invocations agree"*, and that sentence was
+the whole basis for saying the extraction changed nothing. The film it compared against held 19
+files. The real film holds 26 documents. Eight were missing outright — including both prompt
+ledgers, the run record and the findings-derived checklist. Three were stale copies from an
+earlier staging. The facts file had been renamed.
+
+The origin *scripts* were genuine: re-hashed against the operator's own disk, all fifteen
+byte-identical. So the manifest discipline worked perfectly, in the one place it was applied —
+`--origin-scripts`. `--film` took any directory and asked it nothing.
+
+**Why the trimmed film existed at all.** Cost. Two `copytree` calls over a 2.7 GB film is 5.4 GB
+and several minutes, so at some point a smaller stand-in got assembled and never replaced. That
+is the actual mechanism, and it generalises: **a gate too expensive to run on the real thing
+will be run on something else, and the report will not mention the substitution.**
+
+**Fix.** `dual_run` hard-links pictures and copies only text, deny-by-default: unknown suffixes
+are COPIED, because a text file wrongly linked would be rewritten through the link into the
+operator's own film. The real film now stages in seconds. Run against it, the invocation count
+went from 34 to 43 — nine calls that had never happened.
+
+**The transferable rule.** *Hash the subject as well as the instrument.* Both inputs to a
+differential test are inputs. Verifying one of them and trusting the other by name is the same
+error as trusting a transfer tool's success report, which is FK-01 — and this is FK-01 again,
+one level up, four gates later, in the gate built to prevent it.
+
+**What is not encoded:** there is still no manifest on `--film`. The check that exists is
+"does this film declare its documents" (FK-13), which is not the same question as "is this the
+film you think it is".
+
+---
+
+## FK-13 · THREE TOOLS REPORTED NOTHING, TRUTHFULLY, AND EXITED ZERO
+
+<!-- guard: automatic   scope: process
+     ask: for each tool that reported an empty result this run, name the file it read and confirm it exists -->
+
+**What happened.** Run against the real film, seven tools "differed" and the gate called every
+difference an extraction bug. None of them was. The film has never been adopted: its ledger is
+`TARN_FINDINGS.md` and its script `TARN_shot_script.md`, and the kit resolves `FINDINGS.md` and
+`SHOT_SCRIPT.md`.
+
+So `checklist.py` looked for a ledger, did not find one, and printed:
+
+> no findings ledger at FINDINGS.md — nothing to derive a checklist from. **That is correct for
+> a film with no faults recorded yet.** Write the first finding when the first thing costs you
+> something.
+
+then wrote a checklist of nothing and **exited zero**. The film has 74 findings. `crossshot`
+reported *"no block found — the script heading format may have changed"* for every shot in the
+film. `staleness` reported 0 headings against 23. Three tools, one cause, all three green.
+
+Every word of that message is true of the file it looked for and false of the film in front of
+it. **An empty result with a zero exit is indistinguishable from a clean one** — which is the
+failure class the entire kit exists to remove, found in the kit's own reporting paths.
+
+Note what it is NOT: not a crash, not a warning, not a silent skip. It is a considered,
+well-written, reassuring sentence about a file that is not there.
+
+**Fix.**
+
+| | |
+|---|---|
+| `_project.undeclared()` | names every role where the kit fell back to a default, the default is absent, and a file answering to that name is sitting in the film |
+| `_project.files()` | **refuses** in that case rather than resolving to a path it knows is not there |
+| `filmkit-adopt` | proposes the `_files` block; **refuses to choose** when a role has several candidates |
+| `filmkit-doctor` | reports undeclared roles as a red line |
+| `dual_run`, `verify` | refuse up front — an undeclared film makes them compare configuration and report it as defect |
+
+**The transferable rule.** *A tool that can report zero must be able to distinguish "nothing
+there" from "not looking there".* Where it cannot, zero is not a result and must not be
+rendered as one. The test is cheap and mechanical: when a lookup comes back empty, does
+anything in the directory answer to that name? If so, the emptiness is a configuration error
+wearing a result's clothes.
+
+**What is not encoded:** the match is on the tail of the filename, case-insensitively. A film
+that calls its ledger `notes.md` gets no candidate and no refusal — it gets the reassuring
+sentence, correctly, because from the outside that film really does look like it has no ledger.
