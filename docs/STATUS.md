@@ -148,3 +148,10 @@ generation from.
 `tests/verify.py` now builds its clean film by RUNNING filmkit-init rather than copying
 the template directory — the first version tested a layout nobody creates that way and
 left the very first command anyone types completely unexercised.
+
+## snapshot_origin
+
+`dual_run` refuses to run without a SHA-256 manifest (FK-01) and nothing portable
+produced one — `sha256sum` is not a Windows command. `tests/snapshot_origin.py` copies a
+film's own guard scripts and hashes them FROM THE SAME READ, because hashing afterwards
+verifies that the copy matches the copy.
