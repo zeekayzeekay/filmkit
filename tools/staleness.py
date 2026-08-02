@@ -36,7 +36,7 @@ import json, pathlib, re, sys
 import _project as P  # FK1: where the film is
 
 HERE = P.DIR
-PROMPTS = P.files("prompts")
+PROMPTS = P.file_list("prompts")
 FACTS = P.PATH
 ARCHIVE = HERE / "_archive"
 
@@ -48,43 +48,53 @@ CLAIMS_CURRENT = re.compile(r"\blive\b|\bfinal\b|\bselected\b|\bcurrent\b", re.I
 
 
 def blocks():
-    """(heading, status, attrs) for every heading in the prompts file."""
-    if not PROMPTS.exists():
-        return []
-    lines = PROMPTS.read_text(encoding="utf-8").splitlines()
+    """
+    (file, heading, status, attrs) for every heading in EVERY prompt ledger.
+
+    A film may keep its prompts in one file or in several. The origin project kept
+    four and its own staleness read one of them, so three ledgers were never
+    checked for a superseded block calling itself live. Reading all of them also
+    makes the LIVE-role uniqueness check work ACROSS ledgers, which is where a
+    duplicate is most likely and least visible.
+    """
     out = []
-    for i, l in enumerate(lines):
-        m = re.match(r"^#{1,3} (.+?)\s*$", l)
-        if not m:
+    for f in PROMPTS:
+        if not f.exists():
             continue
-        nxt = lines[i + 1] if i + 1 < len(lines) else ""
-        s = re.match(r"<!--\s*status:\s*(\w+)(.*?)-->", nxt.strip())
-        out.append((m.group(1), s.group(1) if s else None, s.group(2) if s else ""))
+        lines = f.read_text(encoding="utf-8").splitlines()
+        for i, l in enumerate(lines):
+            m = re.match(r"^#{1,3} (.+?)\s*$", l)
+            if not m:
+                continue
+            nxt = lines[i + 1] if i + 1 < len(lines) else ""
+            s = re.match(r"<!--\s*status:\s*(\w+)(.*?)-->", nxt.strip())
+            out.append((f.name, m.group(1), s.group(1) if s else None,
+                        s.group(2) if s else ""))
     return out
 
 
 def main():
     bad, blks = [], blocks()
 
-    unmarked = [h for h, s, _ in blks if s is None or s == "UNMARKED"]
-    for h in unmarked:
-        bad.append(f"heading has no status marker: {h[:70]!r}")
+    unmarked = [(fn, h) for fn, h, s, _ in blks if s is None or s == "UNMARKED"]
+    for fn, h in unmarked:
+        bad.append(f"{fn}: heading has no status marker: {h[:70]!r}")
 
     roles = {}
-    for h, s, a in blks:
+    for fn, h, s, a in blks:
         if s == "LIVE":
             r = re.search(r"role:\s*(\S+)", a)
-            roles.setdefault(r.group(1) if r else "?", []).append(h)
+            roles.setdefault(r.group(1) if r else "?", []).append(f"{fn}: {h}")
     for role, hs in roles.items():
         if len(hs) > 1:
             bad.append(f"{len(hs)} blocks claim to be LIVE for role {role}: {hs}")
 
-    for h, s, a in blks:
+    for fn, h, s, a in blks:
         if s in ("SUPERSEDED", "INFO", "DRAFT") and CLAIMS_CURRENT.search(h):
             bad.append(f"a {s} heading still calls itself live/final/selected — this is the "
                        f"exact trap that put two edits in the wrong block: {h[:70]!r}")
         if s == "SUPERSEDED" and "by:" not in a:
-            bad.append(f"SUPERSEDED block does not name its replacement: {h[:70]!r}")
+            bad.append(f"{fn}: SUPERSEDED block does not name its replacement: {h[:70]!r}")
 
     archived = {p.name for p in ARCHIVE.glob("*.md")} if ARCHIVE.exists() else set()
     for f in LIVE_DOCS:
@@ -120,13 +130,18 @@ def main():
 
     if "--list" in sys.argv:
         print()
-        for h, s, a in blks:
+        last = None
+        for fn, h, s, a in blks:
+            if fn != last:
+                print(f"\n  --- {fn}")
+                last = fn
             print(f"  {str(s):11s} {h[:74]}")
         print()
 
     from collections import Counter
-    c = Counter(s or "UNMARKED" for _, s, _ in blks)
-    print(f"\n  {len(blks)} headings · " + " · ".join(f"{n} {k}" for k, n in sorted(c.items())))
+    c = Counter(s or "UNMARKED" for _, _, s, _ in blks)
+    n_files = len({fn for fn, _, _, _ in blks})
+    print(f"\n  {len(blks)} headings in {n_files} ledger(s) · " + " · ".join(f"{n} {k}" for k, n in sorted(c.items())))
 
     if bad:
         print(f"\n  {len(bad)} STALENESS VIOLATION(S):")

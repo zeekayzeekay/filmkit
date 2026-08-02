@@ -101,6 +101,26 @@ def _expected():
 EXPECTED = _expected()
 
 
+def _divergences():
+    """
+    Tools the film has deliberately made behave differently from the origin.
+
+    A DIFFERENCE is the same work reported in different words, and can be
+    expressed as a substitution. A DIVERGENCE is different work. It cannot, and
+    pretending otherwise is how an acceptance gate gets talked into going green
+    about a change nobody measured. So these are a separate list, they are
+    printed as their own section, and each one states WHAT IT NARROWS.
+    """
+    f = pathlib.Path(__file__).with_name("expected_differences.json")
+    if not f.exists():
+        return {}
+    d = json.loads(f.read_text(encoding="utf-8"))
+    return {x["tool"]: x for x in d.get("divergences", [])}
+
+
+DIVERGENT = _divergences()
+
+
 def account_for(origin_line, kit_line, film_facts_name):
     """True if the two lines differ ONLY by a declared expected substitution."""
     for frm, to, _why in EXPECTED:
@@ -294,7 +314,7 @@ def main():
         facts_name = next((c.name for c in sorted(b_dir.glob("*_facts.json"))), "film_facts.json")
         invocations = TOOLS + lint_invocations(a_dir)
         print(f"  DUAL RUN — {len(invocations)} invocations, two copies of {film.name}\n")
-        same = diff = 0
+        same = diff = declared = 0
         for tool, args in invocations:
             src = origin / tool
             if not src.exists():
@@ -316,6 +336,10 @@ def main():
                 same += 1
                 note = f", {accounted} expected" if accounted else ""
                 print(f"  ok {label:30s} identical ({len(la)} lines, exit {rc_a}{note})")
+            elif tool in DIVERGENT:
+                declared += 1
+                print(f"  ~~ {label:30s} DIVERGES by declaration "
+                      f"({len(la)} vs {len(lb)} lines)")
             else:
                 diff += 1
                 print(f"  !! {label:30s} DIFFERS  (exit {rc_a} vs {rc_b}, "
@@ -331,7 +355,19 @@ def main():
                   f"until shown otherwise.")
             print("  Re-run with --show to see the lines.\n")
             return 1
-        print(f"  \033[92mAll {same} invocations agree.\033[0m\n")
+        print(f"  \033[92m{same} invocations agree.\033[0m"
+              + (f"  \033[93m{declared} diverge by declaration.\033[0m" if declared else "")
+              + "\n")
+        if declared:
+            print("  DECLARED DIVERGENCES — the kit deliberately does different work here.")
+            print("  These are NOT evidence of a faithful extraction. Read what each one gives up:\n")
+            for tool, d in DIVERGENT.items():
+                print(f"    {tool}")
+                for label, key in (("why", "why"), ("narrows", "narrows")):
+                    for i, line in enumerate(__import__("textwrap").wrap(d.get(key, ""), 70)):
+                        print(f"      {label.upper() + ':' if i == 0 else '     '} {line}"
+                              if i == 0 else f"            {line}")
+            print()
         if EXPECTED:
             print("  DECLARED EXPECTED DIFFERENCES — each one signed for, not ignored:")
             for frm, _to, why in EXPECTED:

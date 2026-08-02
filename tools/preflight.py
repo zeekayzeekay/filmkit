@@ -143,9 +143,33 @@ def check_fixtures():
     return ok
 
 
+def prompts_file(block):
+    """
+    Which of this film's prompt ledgers holds this block.
+
+    A film may keep prompts in several files. A tool that must act on ONE -- lint
+    a block, export a block -- cannot take element zero of that list, so it
+    locates the block instead. Two ledgers holding the same heading is its own
+    fault and is refused rather than resolved: whichever one you patched, the
+    other still says it is live.
+    """
+    hits = [f for f in P.file_list("prompts")
+            if f.exists() and block in f.read_text(encoding="utf-8")]
+    if not hits:
+        raise SystemExit(f"\n  ! no prompt ledger in this film contains a block matching "
+                         f"{block!r}.\n    Looked in: "
+                         + ", ".join(f.name for f in P.file_list("prompts")) + "\n")
+    if len(hits) > 1:
+        raise SystemExit(f"\n  ! {len(hits)} ledgers contain {block!r}: "
+                         + ", ".join(f.name for f in hits) + "\n"
+                         "    Patch one and the other still claims to be live. Rename the\n"
+                         "    block, or supersede the copy you are not using.\n")
+    return hits[0]
+
+
 def check_prompt(block):
     print(f"\n=== PROMPT — lint_prompt.py --block {block!r}")
-    code, out = run([sys.executable, P.tool("lint_prompt.py"), str(P.files("prompts")),
+    code, out = run([sys.executable, P.tool("lint_prompt.py"), str(prompts_file(block)),
                      "--block", block])
     errs = re.findall(r"\[ERROR\] .*", out)
     warns = re.findall(r"\[WARN\] .*", out)
@@ -217,7 +241,7 @@ def check_export(block, path):
     if not path:
         print("  no --export given; the prompt was not exported this run")
         return True
-    code, out = run([sys.executable, P.tool("patch_block.py"), str(P.files("prompts")),
+    code, out = run([sys.executable, P.tool("patch_block.py"), str(prompts_file(block)),
                      "--block", block, "--export", path])
     print("  " + out.strip().replace("\n", "\n  "))
     return code == 0

@@ -1,6 +1,6 @@
 {
   "_what": "Differences between an origin project's own guard scripts and the kit's ported ones that the extraction MEANT to introduce. Each entry is signed for: it says why the two versions SHOULD differ. dual_run prints them, and still fails on any difference not listed.",
-  "_why_not_code": "These entries name a specific film's filenames, and the kit's own lint refuses a project noun in code. This is data about one comparison, so it lives in a file — the same treatment preflight's fixture corpus got.",
+  "_why_not_code": "These entries name a specific film's filenames, and the kit's own lint refuses a project noun in code. This is data about one comparison, so it lives in a file \u2014 the same treatment preflight's fixture corpus got.",
   "_do_not": "Do not add an entry to turn a red run green. Add one when you can say, in a sentence, why the two versions should differ.",
   "differences": [
     {
@@ -8,6 +8,19 @@
       "to": null,
       "to_means": "null = substitute the film's own facts filename",
       "why": "FK1 removed a hard-coded project filename from lint_prompt's direction-audit message, so it now names whichever facts file the film actually uses. The origin says tarn_facts.json because that is the only film it could ever describe."
+    }
+  ],
+  "_two_kinds": "`differences` are TEXT substitutions: the same work reported in different words. `divergences` are BEHAVIOUR: the kit deliberately doing more or less than the origin. The second kind cannot be expressed as a substitution and must never be smuggled in as one \u2014 it narrows what the acceptance run proves, and the report says so by name.",
+  "divergences": [
+    {
+      "tool": "staleness.py",
+      "why": "The film declared its `prompts` role as FOUR ledgers. The origin's staleness hard-codes one of them, so three were never checked for a superseded block calling itself live. The kit reads all four, and also checks LIVE-role uniqueness ACROSS ledgers, which the origin could not do at all. The outputs therefore differ by design, and the origin's is the smaller of the two.",
+      "narrows": "staleness.py is no longer evidence that the extraction changed nothing. It is evidence of a change somebody asked for. Every other invocation still carries the original claim."
+    },
+    {
+      "tool": "preflight.py",
+      "why": "preflight RUNS staleness and prints its report, so it inherits the widened prompts role. Nothing in preflight itself changed.",
+      "narrows": "This is the expensive one. preflight is the largest tool in the kit and excluding it removes most of what a single acceptance run covers. The extraction evidence for this film is the run made at ADOPTION time, with the prompts role declared as the single ledger the origin read: 43 invocations, all agreeing. Keep that run. This one answers a different question \u2014 what widening the role changed \u2014 and answers it well."
     }
   ]
 }

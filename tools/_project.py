@@ -190,6 +190,38 @@ def _refuse_undeclared(role, default, found):
         "    or let the kit propose the whole block:  filmkit-adopt --apply\n")
 
 
+def file_list(key):
+    """
+    A document role as a LIST, whether the film declared one file or several.
+
+    Some roles are genuinely plural. A film may keep its prompts in one ledger or
+    in four -- the origin project kept four and its own `staleness.py` read one of
+    them, so three ledgers were never checked for superseded blocks by anything.
+    That is not a rule the kit should inherit by making the role scalar.
+
+    Use this wherever the tool can honestly handle several. Where it cannot --
+    where it must act on ONE file -- use `files()`, which REFUSES a plural
+    declaration rather than quietly taking the first. Silently reading element
+    zero of a list the operator wrote deliberately is how a check ends up
+    covering a quarter of what its report implies.
+    """
+    if key not in DEFAULT_FILES:
+        raise KeyError(f"_project.file_list({key!r}) — not a known document role.")
+    declared = _resolve()["FACTS"].get("_files", {})
+    v = declared.get(key, DEFAULT_FILES[key])
+    names = v if isinstance(v, list) else [v]
+    if key not in declared:
+        # same refusal as files(): a default that is absent while the film
+        # visibly holds something answering to that name is a misconfiguration,
+        # not an empty result.
+        for n in names:
+            if not (_resolve()["DIR"] / n).exists():
+                found = candidates(n)
+                if found:
+                    _refuse_undeclared(key, n, found)
+    return [_resolve()["DIR"] / n for n in names]
+
+
 def files(key):
     """A document this film uses, resolved against the FILM's directory."""
     if key not in DEFAULT_FILES:
@@ -198,6 +230,16 @@ def files(key):
     declared = _resolve()["FACTS"].get("_files", {})
     v = declared.get(key, DEFAULT_FILES[key])
     if isinstance(v, list):
+        if not isinstance(DEFAULT_FILES[key], list):
+            # The FILM widened this role and this CALLER cannot handle it. Taking
+            # the first would answer with a quarter of the truth and no marker.
+            raise SystemExit(
+                f"\n  ! role {key!r} is declared as {len(v)} files, and this tool asked for "
+                f"one.\n"
+                f"    {', '.join(v)}\n\n"
+                "    A tool that must act on a single file cannot silently pick from a list\n"
+                "    the film widened on purpose. Either the tool learns the plural form, or\n"
+                "    the caller says which file it means.\n")
         return [_resolve()["DIR"] / x for x in v]
     if key not in declared and not (_resolve()["DIR"] / v).exists():
         found = candidates(v)
