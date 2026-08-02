@@ -117,6 +117,10 @@ def main():
         print("\n  SELFTESTS THAT NEED NO FILM")
         run([sys.executable, str(kit / "tools" / "verify_asset.py"), "--selftest"],
             cwd=film, name="counting detector discriminates")
+        run([sys.executable, str(kit / "hooks" / "session_start.py"), "--selftest"],
+            cwd=tmp, name="state loader briefs and fails silent")
+        run([sys.executable, str(kit / "bin" / "filmkit-promote"), "--selftest"],
+            cwd=tmp, name="promotion gates refuse what they should")
 
         if real:
             print(f"\n  A REAL FILM — {real}")

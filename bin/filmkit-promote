@@ -52,11 +52,110 @@ def bump_minor():
     return out[0]
 
 
+
+RULE_RE = re.compile(r"\*\*The transferable rule\.?\*\*\s*(.+?)(?:\n\n|\Z)", re.S)
+
+
+def evaluate(finding, body, tags, words, kit_text):
+    """
+    The four gates, as a pure function: inputs in, (blockers, passed) out.
+
+    Separated so it can be tested without a film, a kit, or a filesystem — and
+    then tested AGAIN through the command, because FK-05 established that a test
+    of the pure core cannot see the shell around it.
+    """
+    blockers, passed = [], []
+
+    if not finding.get("guard") or not finding.get("ask"):
+        blockers.append("no metadata block — a finding with no `ask:` is in nobody's process")
+    else:
+        passed.append(f"tagged {finding['guard']} / {finding['scope']}")
+
+    ask = finding.get("ask") or ""
+    hits = sorted({t for t in tags if t in ask} |
+                  {w for w in words if re.search(rf"\b{re.escape(w)}\b", ask, re.I)})
+    if hits:
+        blockers.append(f"its `ask:` names this film — {', '.join(hits)}. Rewrite the question "
+                        f"so it asks about any film, then promote.")
+    else:
+        passed.append("its `ask:` names no proper noun of this film")
+
+    if re.search(rf"^## {re.escape(finding['id'])}\b", kit_text, re.M):
+        blockers.append(f"{finding['id']} is already in knowledge/FINDINGS.md")
+    else:
+        passed.append("not already in the kit")
+
+    rule = RULE_RE.search(body)
+    if not rule:
+        blockers.append("no **The transferable rule.** paragraph. The evidence is about one "
+                        "film; the rule is what survives it, and a finding without one "
+                        "promotes a story rather than a lesson.")
+    else:
+        passed.append("carries a transferable rule\n     "
+                      + " ".join(rule.group(1).split())[:92])
+    return blockers, passed
+
+
+def selftest():
+    import subprocess, tempfile
+    ok = True
+    print("\n  PROMOTE SELFTEST — the gates, then the command\n")
+    TAGS, WORDS = ["@hero"], ["seabird"]
+    GOOD = {"id": "X-1", "guard": "automatic", "scope": "build", "ask": "does this apply anywhere?"}
+    RULE = "text\n\n**The transferable rule.** Say it once.\n\nmore"
+
+    for name, fin, body, kit, want in (
+        ("a complete finding passes", GOOD, RULE, "", 0),
+        ("no metadata block", {**GOOD, "guard": None, "ask": None}, RULE, "", 1),
+        ("an ask naming the film", {**GOOD, "ask": "check the seabird plate"}, RULE, "", 1),
+        ("an ask naming an asset tag", {**GOOD, "ask": "look at @hero"}, RULE, "", 1),
+        ("no transferable rule", GOOD, "text with evidence only", "", 1),
+        ("already in the kit", GOOD, RULE, "## X-1 · already here", 1),
+    ):
+        blockers, _ = evaluate(fin, body, TAGS, WORDS, kit)
+        got = 1 if blockers else 0
+        ok &= got == want
+        print(f"  {'ok ' if got == want else '!! '}{name:34s} "
+              f"{'blocked' if got else 'ready':8s} {'(' + blockers[0][:44] + ')' if blockers else ''}")
+
+    # END TO END. The gates above are a function; this is the command.
+    with tempfile.TemporaryDirectory() as d:
+        film = pathlib.Path(d)
+        (film / "film_facts.json").write_text(json.dumps(
+            {"_fact_rev": 1, "kit_version": "0.0.0", "look_pack": None, "assets": {}}),
+            encoding="utf-8")
+        (film / "FINDINGS.md").write_text(
+            "# F\n\n## X-9 · A THING\n\n<!-- guard: manual  scope: process\n"
+            "     ask: is this general? -->\n\nEvidence only.\n", encoding="utf-8")
+        r = subprocess.run([sys.executable, str(pathlib.Path(__file__).resolve()), "X-9"],
+                           capture_output=True, text=True, cwd=film)
+        good = r.returncode == 1 and "transferable rule" in r.stdout
+        ok &= good
+        print(f"  {'ok ' if good else '!! '}{'the command blocks and says why':34s} exit "
+              f"{r.returncode}")
+        r2 = subprocess.run([sys.executable, str(pathlib.Path(__file__).resolve()), "X-404"],
+                            capture_output=True, text=True, cwd=film)
+        good2 = r2.returncode != 0 and "not in" in (r2.stdout + r2.stderr)
+        ok &= good2
+        print(f"  {'ok ' if good2 else '!! '}{'an unknown id is refused cleanly':34s} exit "
+              f"{r2.returncode}")
+
+    print()
+    print("  \033[92mAll cases pass.\033[0m" if ok else "  \033[91mFAILED.\033[0m")
+    print("  NOT tested: --apply, which mutates the kit's findings and version. It has been")
+    print("  run for real twice; a test that exercised it would have to write to the kit it")
+    print("  is testing, and a self-mutating test is worse than an untested path.\n")
+    return 0 if ok else 1
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("finding_id")
-    ap.add_argument("--apply", action="store_true", help="actually move it")
-    a = ap.parse_args()
+    ap.add_argument("finding_id", nargs="?")
+    ap.add_argument("--apply", action="store_true", help="actually copy it")
+    ap.add_argument("--selftest", action="store_true", help="exercise the gates")
+    a = ap.parse_known_args()[0]
+    if a.selftest:
+        return selftest()
 
     import _project as P
     import checklist as C
@@ -76,41 +175,12 @@ def main():
     m = re.search(rf"\n## {re.escape(a.finding_id)}\b.*?(?=\n## |\Z)", text, re.S)
     body = m.group(0) if m else ""
 
-    print(f"\n  PROMOTE {a.finding_id} — {f['title'][:64]}\n")
-    blockers = []
-
-    # ---- gate 1: tagged at all
-    if not f.get("guard") or not f.get("ask"):
-        blockers.append("no metadata block — a finding with no `ask:` is in nobody's process")
-    else:
-        print(f"  ok tagged {f['guard']} / {f['scope']}")
-
-    # ---- gate 2: the ask names no proper noun of this film
     tags, words = PT.project_nouns()
-    ask = f.get("ask") or ""
-    hits = sorted({t for t in tags if t in ask} |
-                  {w for w in words if re.search(rf"\b{re.escape(w)}\b", ask, re.I)})
-    if hits:
-        blockers.append(f"its `ask:` names this film — {', '.join(hits)}. Rewrite the question "
-                        f"so it asks about any film, then promote.")
-    else:
-        print("  ok its `ask:` names no proper noun of this film")
-
-    # ---- gate 3: not already there
     kf, ktext = kit_findings()
-    if re.search(rf"^## {re.escape(a.finding_id)}\b", ktext, re.M):
-        blockers.append(f"{a.finding_id} is already in knowledge/FINDINGS.md")
-    else:
-        print("  ok not already in the kit")
-
-    # ---- gate 4: it carries a transferable rule
-    rule = re.search(r"\*\*The transferable rule\.?\*\*\s*(.+?)(?:\n\n|\Z)", body, re.S)
-    if not rule:
-        blockers.append("no **The transferable rule.** paragraph. The evidence is about one "
-                        "film; the rule is what survives it, and a finding without one "
-                        "promotes a story rather than a lesson.")
-    else:
-        print(f"  ok carries a transferable rule\n     {' '.join(rule.group(1).split())[:92]}")
+    print(f"\n  PROMOTE {a.finding_id} — {f['title'][:64]}\n")
+    blockers, passed = evaluate(f, body, tags, words, ktext)
+    for line in passed:
+        print(f"  ok {line}")
 
     if blockers:
         print(f"\n  \033[91mNOT PROMOTED — {len(blockers)} blocker(s)\033[0m\n")

@@ -36,9 +36,16 @@ def scripts():
     # tests/ was outside every check until FK5's review. The files that verify
     # the kit are as capable of a bare sibling invocation or a hard-coded project
     # noun as the files they verify -- and a broken verifier reports success.
+    # bin/ was the last directory outside every check. Its files carry no .py
+    # suffix, which is exactly why they were missed: the glob looked like it
+    # covered the repo and covered three quarters of it.
+    binfiles = [f for f in sorted((KIT / "bin").glob("*"))
+                if f.is_file() and f.read_text(encoding="utf-8", errors="ignore")
+                .startswith("#!/usr/bin/env python")]
     return (sorted(TOOLS.glob("*.py"))
             + sorted((KIT / "hooks").glob("*.py"))
-            + sorted((KIT / "tests").glob("*.py")))
+            + sorted((KIT / "tests").glob("*.py"))
+            + binfiles)
 FAIL = []
 
 
@@ -313,8 +320,16 @@ if _SKILLS.exists():
 
 
 def main():
-    tools = sorted(p.name for p in TOOLS.glob("*.py"))
-    print(f"\n  kit lint — {len(tools)} tools\n")
+    # Count what is CHECKED, not what lives in tools/. The line said "16 tools"
+    # while checking 26 files across four directories — a report that understates
+    # its own coverage is the same fault as one that overstates it, and both were
+    # in this file.
+    checked = scripts()
+    where = {}
+    for f in checked:
+        where[f.parent.name] = where.get(f.parent.name, 0) + 1
+    print(f"\n  kit lint — {len(checked)} files: "
+          + " · ".join(f"{n} {d}" for d, n in sorted(where.items())) + "\n")
     if not FAIL:
         print("  \033[92mNo faults of any known class.\033[0m")
         print("  Checked: bare sibling invocation · tool source read from the film ·")

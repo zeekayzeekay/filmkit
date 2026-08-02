@@ -520,3 +520,52 @@ like.
 **What is not encoded:** the structural definition needs an allow-list of its own — the generic
 document names the kit legitimately uses. That list is a judgement, and a film that names a
 document `README.md` will not be caught.
+
+---
+
+## FK-10 · A FILM THAT NUMBERED ITS FINDINGS DIFFERENTLY WOULD HAVE HAD NO REVIEW LAYER AT ALL
+
+<!-- guard: automatic  scope: process
+     ask: when this parser does not recognise something, does it SAY SO — or does it skip and report success? -->
+
+**Cost:** none, and only because a selftest I was writing for something else happened to invent
+a finding called `X-9`.
+
+`checklist.py` derives the review checklist from the findings ledger, and `preflight` refuses
+to pass until every `manual` item in it has a written answer. That chain is the entire manual
+review layer.
+
+Its heading parser matched `(F-\d+[a-z]?|FK-\d+|DECISION)` — **one project's naming convention,
+hard-coded in the engine.** A film numbering its findings `BUG-3`, `SHOT-12` or anything else
+gets:
+
+```
+wrote REVIEW_CHECKLIST.md: 0 findings, 0 manual, 0 untagged
+```
+
+**Zero, and a success message.** No error, no warning, exit 0. Every finding invisible, the
+manual gate with nothing to require, and `preflight` printing PASS on a film whose entire
+review layer had silently evaporated.
+
+**This is the fourth time.** F-56's counting detector was an allow-list of ten nouns. The spend
+gate's first matcher was an allow-list of six tool names. `kit_lint`'s project-noun check
+spelled out one film's filenames. Now this. Every one is the same move: **enumerate the
+instances you have seen instead of describing the class.**
+
+**And the file already knew.** Its own comment records F-56b — a two-word `scope:` value that
+silently dropped a finding out of this same parser — and the fix recorded there was not to
+widen the pattern by one case but to make `untagged` a **failure** rather than a note, because
+*"in nobody's process"* is the condition the file exists to make impossible. The id pattern
+kept its silence anyway.
+
+**Fix, in two parts.** The pattern is now general — `LETTERS-NUMBER`, so `F-12`, `FK-3`,
+`BUG-7` and `DECISION` all parse. And a heading that carries a metadata block but whose id is
+still unrecognised is **reported by name**, because widening a pattern only moves the edge; it
+is the silence at the edge that does the damage.
+
+**The transferable rule.** *A parser that skips what it does not recognise must say what it
+skipped.* Widening the pattern fixes today's case; reporting the remainder fixes the class.
+
+**What is not encoded:** the heading must still carry a metadata block to be noticed. A finding
+with neither a recognisable id nor a metadata block is indistinguishable from an ordinary
+section heading, and nothing can tell them apart.

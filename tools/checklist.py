@@ -43,7 +43,7 @@ META = re.compile(
     r"ask:\s*(?P<ask>.+?)\s*-->", re.S)
 
 
-def findings():
+def findings(_report=None):
     # A film that has not had its first fault yet has no ledger. That is the
     # NORMAL state of a new project, and it was a FileNotFoundError traceback --
     # in the first command filmkit-init tells you to run. FK-04's class exactly:
@@ -54,7 +54,7 @@ def findings():
         print("  finding when the first thing costs you something.\n")
         return []
     text = LEDGER.read_text(encoding="utf-8")
-    out = []
+    out, unparsed = [], []
     parts = re.split(r"\n## ", text)
     for p in parts[1:]:
         head = p.split("\n", 1)[0].strip()
@@ -64,8 +64,21 @@ def findings():
         # "b · CLOSES THE FAR END..." and collided with the real F-61. Two
         # findings, one id, one mangled title, in the file whose whole purpose
         # is that the checklist cannot disagree with the ledger.
-        m = re.match(r"(F-\d+[a-z]?|FK-\d+|DECISION)\s*·?\s*(.*)", head)
+        m = re.match(r"([A-Z][A-Z0-9]{0,7}-\d+[a-z]?|DECISION)\s*·?\s*(.*)", head)
         if not m:
+            # A heading that carries a metadata block but whose id this parser
+            # does not recognise is a finding that VANISHES. The pattern used to
+            # be (F-\d+|FK-\d+|DECISION) -- one project's naming convention,
+            # hard-coded -- so a film numbering its findings BUG-3 or SHOT-12 got
+            # "0 findings, 0 manual, 0 untagged" and a success message. The manual
+            # review layer would simply not exist, and preflight's gate would have
+            # nothing to require.
+            #
+            # Same shape as F-56b, where a two-word scope silently dropped a
+            # finding out of this same file, and the fix was to make the silence
+            # impossible rather than to widen the pattern by one case.
+            if META.search(p):
+                unparsed.append(head[:70])
             continue
         fid, title = m.group(1), m.group(2)
         meta = META.search(p)
@@ -73,6 +86,14 @@ def findings():
                         guard=meta.group("guard") if meta else None,
                         scope=meta.group("scope") if meta else None,
                         ask=" ".join(meta.group("ask").split()) if meta else None))
+    if unparsed:
+        print(f"\n  !! {len(unparsed)} heading(s) carry a metadata block and an id this parser")
+        print("     does not recognise, so they are in NOBODY'S process:")
+        for h in unparsed:
+            print(f"       ## {h}")
+        print("     Expected LETTERS-NUMBER, e.g. F-12, FK-3, BUG-7, or DECISION.\n")
+        if _report is not None:
+            _report.extend(unparsed)
     return out
 
 

@@ -122,3 +122,14 @@ findings with four gates. F-69 and F-71 are now in the kit; the version went 0.1
 
 Most of the origin's 74 findings are BLOCKED, and that is the point — they carry no
 transferable rule, so they would promote a story rather than a lesson.
+
+## Review before FK7
+
+kit_lint now covers `bin/` — the last directory outside every check, missed because its
+files carry no `.py` suffix. Its own count said "16 tools" while checking 25 files
+across four directories; a report that understates its coverage is the same fault as one
+that overstates it.
+
+`filmkit-promote` gains a selftest: the four gates as a pure function, plus two
+end-to-end cases through the command, because FK-05 established a pure-core test cannot
+see the shell. Writing it found FK-10.
