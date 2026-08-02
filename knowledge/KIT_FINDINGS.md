@@ -813,3 +813,70 @@ evidence about a program that does not.
 **What is not encoded:** the entry-point list in `encoding_test` is hand-maintained. A new
 executable added to `bin/` is covered by `kit_lint`'s structural check but not by the
 behavioural one until somebody adds it.
+
+---
+
+## FK-15 · DOCTOR TOLD EVERY WINDOWS OPERATOR THE REGISTRATION POINTED AT A DIFFERENT KIT
+
+<!-- guard: automatic   scope: process
+     ask: which of this run's checks compare a PATH, and does either side of that comparison pass through an encoder? -->
+
+**What happened.** `filmkit-doctor --selftest` failed on the operator's machine and passed on
+mine, through four exchanges, because `verify.py` was reporting the epilogue instead of the
+failing case. Once it named the case — `!! --install satisfies both hosts` — the cause was one
+line:
+
+```python
+elif str(KIT / "hooks") not in txt:          # txt is the raw registration file
+    r.add(WARN, f"{host}: registration points at a different kit")
+```
+
+`txt` is JSON. A Windows path inside JSON is backslash-escaped:
+
+```
+"command": "C:\\Python\\python.exe C:\\ai-video\\filmkit\\hooks\\gate.py"
+```
+
+while `str(KIT / "hooks")` is `C:\ai-video\filmkit\hooks`, single backslashes. The needle can
+never appear in the haystack. So doctor reported *"points at a different kit"* on every Windows
+machine — **immediately after writing that registration itself** — and the selftest's
+`--install satisfies both hosts` case failed because the two expected `hook registered` rows
+were never emitted.
+
+Nothing on a POSIX machine can see this. A POSIX path contains no character JSON escapes, so
+the comparison is accidentally correct on the platform I develop on and wrong on the platform
+the kit is for.
+
+**Why it matters more than a cosmetic warning.** It sits in the enforcement-REPORTING path.
+An operator who sees "points at a different kit" every single time, on a correctly installed
+gate, learns that doctor's registration line means nothing — and that is the line that would
+otherwise tell them the gate is genuinely mis-wired.
+
+**Fix.** `registration_state()` parses the JSON and walks it for every `command` value, then
+compares real strings. Same treatment for the interpreter-by-name and environment-variable
+checks, which had the same defect in a quieter form: both scanned raw text, and both would
+have missed a `%FILMKIT%` on Windows entirely.
+
+**The guard is the part worth having.** Eight cases, fixtures carrying BOTH path shapes,
+`pathlib.PureWindowsPath` so the Windows case runs on Linux:
+
+```
+ok posix registration reads as registered
+ok WINDOWS registration reads as registered          <- the case that was failing
+ok windows interpreter by name is refused
+ok posix env var is refused
+ok windows env var is refused
+ok a registration for another kit is a warning
+ok unparseable json is refused
+ok a registration with no command is refused
+```
+
+**The transferable rule.** *A cross-platform check needs a fixture from the other platform.*
+Not a machine — a fixture. `PureWindowsPath` and `PurePosixPath` cost nothing and run
+everywhere, and every comparison this kit makes against a path or a serialised path should
+carry both. The general form: **when a value crosses an encoder — JSON, shell, URL — compare
+it after decoding, never before.**
+
+**What is not encoded:** the same class may still exist elsewhere in the kit wherever a path is
+matched against serialised text. `kit_lint` does not check for it, and I have not audited the
+remaining sites.

@@ -89,6 +89,73 @@ def registration(gate_dir):
     return d
 
 
+def commands_in(doc):
+    """Every "command" string anywhere in a host's registration, whatever its shape.
+
+    The two hosts nest differently and both may change. Walking for the key is
+    shape-independent; matching the file's raw text is not."""
+    out = []
+
+    def walk(x):
+        if isinstance(x, dict):
+            for k, v in x.items():
+                if k == "command" and isinstance(v, str):
+                    out.append(v)
+                else:
+                    walk(v)
+        elif isinstance(x, list):
+            for v in x:
+                walk(v)
+    walk(doc)
+    return out
+
+
+def registration_state(txt, kit_hooks):
+    """
+    (state, headline, detail) for one host's registration — from the PARSED JSON.
+
+    WHY PARSED AND NOT GREPPED
+    --------------------------
+    The first version searched the RAW TEXT for `str(KIT / "hooks")`. In JSON a
+    Windows path is escaped:
+
+        "command": "C:\\\\Users\\\\...\\\\python.exe C:\\\\ai-video\\\\filmkit\\\\hooks\\\\gate.py"
+
+    so the unescaped needle `C:\\ai-video\\filmkit\\hooks` never matched, and
+    doctor reported *"points at a different kit"* on every Windows machine —
+    immediately after writing that registration itself. Its own selftest caught
+    the consequence (`--install satisfies both hosts` failed) and only on
+    Windows, because a POSIX path has no character JSON escapes.
+
+    A warning that is always wrong is a warning nobody reads, and this one sits
+    in the enforcement-reporting path.
+    """
+    import re as _re
+    try:
+        doc = json.loads(txt)
+    except Exception as e:
+        return BAD, f"registration is not valid JSON ({e})", \
+               "An unparseable registration is not a registration. Re-run --install."
+    cmds = commands_in(doc)
+    if not cmds:
+        return BAD, "registration carries no command", \
+               "Nothing will run. Re-run --install."
+    for c in cmds:
+        if _re.match(r'\s*"?(python3?|py)(\.exe)?["\s]', c + " "):
+            return BAD, "registration invokes the interpreter by NAME", \
+                   ("That is a PATH lookup. On a machine where it resolves to nothing the\n"
+                    "hook fails, and a hook failure LETS THE CALL THROUGH.\n"
+                    "Re-run --install to write an absolute interpreter path.")
+        if "$" in c or _re.search(r"%\w+%", c):
+            return BAD, "registration interpolates an environment variable", \
+                   ("A command that fails to expand is a hook FAILURE, and a hook failure\n"
+                    "LETS THE CALL THROUGH. Re-run --install.")
+    if not any(str(kit_hooks) in c for c in cmds):
+        return WARN, "registration points at a different kit", \
+               f"This kit is at {kit_hooks.parent}. Re-run --install to repoint it."
+    return OK, "hook registered, absolute path, no variable", ""
+
+
 def check(film, facts_path, r):
     import _project as P
     version = P.kit_version()
@@ -166,22 +233,9 @@ def check(film, facts_path, r):
                       "Nothing will stop a generation. Run:  filmkit-doctor --install")
                 continue
             try:
-                txt = path.read_text(encoding="utf-8")
-                import re as _re
-                if _re.search(r'"command":\s*"(python3?|py)\b', txt):
-                    r.add(BAD, f"{host}: registration invokes the interpreter by NAME",
-                          "That is a PATH lookup. On a machine where it resolves to nothing\n"
-                          "the hook fails, and a hook failure LETS THE CALL THROUGH.\n"
-                          "Re-run --install to write an absolute interpreter path.")
-                elif "$" in txt:
-                    r.add(BAD, f"{host}: registration interpolates an environment variable",
-                          "A command that fails to expand is a hook FAILURE, and a hook\n"
-                          "failure LETS THE CALL THROUGH. Re-run --install.")
-                elif str(KIT / "hooks") not in txt:
-                    r.add(WARN, f"{host}: registration points at a different kit",
-                          f"This kit is at {KIT}. Re-run --install to repoint it.")
-                else:
-                    r.add(OK, f"{host}: hook registered, absolute path, no variable")
+                state, why, detail = registration_state(path.read_text(encoding="utf-8"),
+                                                        KIT / "hooks")
+                r.add(state, f"{host}: {why}", detail)
             except Exception as e:
                 r.add(BAD, f"{host}: registration unreadable ({e})")
 
@@ -234,6 +288,45 @@ def selftest():
     import json as _json, tempfile
     ok = True
     print("\n  DOCTOR SELFTEST\n")
+
+    # ---- THE REGISTRATION VERDICT, ON BOTH PATH SHAPES ---------------------
+    # This block exists because the previous version of `registration_state`
+    # grepped the file's raw text for the kit path, and a Windows path in JSON is
+    # backslash-escaped -- so it never matched, and doctor told every Windows
+    # operator the registration pointed at a different kit, right after writing
+    # it. Nothing on a POSIX machine could see that: a POSIX path has no
+    # character JSON escapes. The fixtures below carry the other platform's path
+    # shape, so this runs anywhere and fails on the machine that caused it.
+    def _reg(cmd):
+        return _json.dumps({"hooks": {"PreToolUse": [
+            {"matcher": "x", "hooks": [{"type": "command", "command": cmd}]}]}})
+
+    _win = pathlib.PureWindowsPath(r"C:\ai-video\filmkit\hooks")
+    _nix = pathlib.PurePosixPath("/opt/filmkit/hooks")
+    for name, txt, root, want in (
+        ("posix registration reads as registered",
+         _reg("/usr/bin/python3.12 /opt/filmkit/hooks/gate.py"), _nix, OK),
+        ("WINDOWS registration reads as registered",
+         _reg(r"C:\Python\python.exe C:\ai-video\filmkit\hooks\gate.py"), _win, OK),
+        ("windows interpreter by name is refused",
+         _reg(r"python C:\ai-video\filmkit\hooks\gate.py"), _win, BAD),
+        ("posix env var is refused",
+         _reg("$CODEX_PLUGIN_ROOT/hooks/gate.py"), _nix, BAD),
+        ("windows env var is refused",
+         _reg(r"%FILMKIT%\hooks\gate.py"), _win, BAD),
+        ("a registration for another kit is a warning",
+         _reg(r"C:\Python\python.exe D:\other\hooks\gate.py"), _win, WARN),
+        ("unparseable json is refused", "{not json", _win, BAD),
+        ("a registration with no command is refused", _json.dumps({"hooks": {}}), _win, BAD),
+    ):
+        got = registration_state(txt, root)[0]
+        good = got == want
+        ok &= good
+        print(f"  {'ok ' if good else '!! '}{name}")
+        if not good:
+            print(f"       wanted {want.strip()!r}, got {got.strip()!r}")
+    print()
+
     with tempfile.TemporaryDirectory() as d:
         film = pathlib.Path(d)
         (film / "film_facts.json").write_text(_json.dumps(
