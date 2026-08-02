@@ -947,3 +947,41 @@ not opened.* Two of my three claims were about files sitting in the working dire
 the inspected machine. There is no guard here and I do not know what one would look like —
 which is why this finding is `manual` and its question is aimed at me rather than at a
 script.
+
+
+---
+
+## FK-16b · THE INSPECTION LEFT A LOCK IN HIS REPOSITORY
+
+<!-- guard: manual   scope: process
+     ask: did the tool you inspected with WRITE anything, and can it clean up after itself? -->
+
+**What happened.** The same bridge inspection that produced FK-16's wrong reading also ran
+`git status` and `git diff` inside the operator's clone. Git created `.git/index.lock` to
+refresh the index. The bridge forbids `unlink`, so git could not remove it, and said so:
+
+```
+warning: unable to unlink '.../.git/index.lock': Operation not permitted
+```
+
+That line was in my own output. I read past it, wrote the runbook, and his `git merge
+--ff-only` failed on a lock I had left behind — a zero-byte file, blocking the only path
+forward, several exchanges later.
+
+**Two separate mistakes, one incident.**
+
+1. I treated `git status` as a read. It is not: git writes to refresh its index. On a
+   filesystem that cannot delete, any command that takes a lock leaves one.
+2. **The warning was displayed and I did not act on it.** Not buried, not truncated — in
+   the same output I was reading conclusions from. The bridge's own documented limitation
+   (`rm` is not permitted on a mounted folder) was already known to me, which is exactly
+   what should have made the warning legible.
+
+**The transferable rule.** *An inspection that can write is not an inspection.* Before
+running a tool against somebody else's working copy, ask what it writes and whether it can
+undo it — and if the answer is "it takes a lock", run it on a copy instead. Copying the
+repository first costs a second and removes the entire class.
+
+**What is not encoded:** nothing in the kit knows about the bridge, and nothing should. This
+is a rule about how I work, not about what the tools do, which is why both halves of FK-16
+are `manual` and both questions are aimed at me.
