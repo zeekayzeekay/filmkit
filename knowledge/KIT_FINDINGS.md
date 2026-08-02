@@ -1107,3 +1107,48 @@ host encoding that can represent everything the origin prints but maps it differ
 genuinely different code page rather than a smaller one — would pass the check and still
 compare wrongly. I have not thought of a way to detect that without running both sides
 first.
+
+---
+
+## FK-19 · THE GATE COVERS A HOST THAT OPENS THE FOLDER, AND THE WORK WAS NOT HAPPENING THERE
+
+<!-- guard: manual   scope: delivery
+     ask: name the surface you are in right now, and say what would stop a generation firing from it -->
+
+**What happened.** The whole enforcement design — `PreToolUse`, `permissionDecision: "deny"`,
+a receipt keyed to a prompt hash — assumes a host that **opens the film's folder** and reads
+`.claude/settings.json` or `.codex/hooks.json` from it. `filmkit-doctor` reported all of it
+green, correctly.
+
+Then the operator asked how to complete the trust step in the surface he had actually been
+working in for the entire project: an assistant session running in a cloud container, with
+the same generation MCP server attached and a different working directory.
+
+It does not read that registration. It never did. **Every generation discussed in this
+project could have been fired from a surface the gate does not cover**, and nothing in the
+kit said so.
+
+**This is not a defect in the hook.** A per-project file governs a process that opens that
+project. The defect is that the kit's own reporting — the tool whose entire job is to say
+what is and is not wired — described the gate as if registration and trust were the only two
+open questions, when *which surface you are in* was a third and larger one.
+
+The claim I made at the start of this work was **"hard block on spend."** The true claim is
+"hard block on spend, in a host that opens this folder." The second is still worth having.
+It is not the first.
+
+**Fix.** `filmkit-doctor` now prints the boundary as its own line, beside the trusted line,
+in the same amber. And the trusted line now says that `/hooks` proves the hook is LOADED,
+not that the host consults it before spending — the only proof of that is attempting a
+generation and being refused.
+
+**The transferable rule.** *An enforcement mechanism has a surface, and the surface is part
+of the claim.* Write down where it applies at the same moment you write down what it does,
+because the reader will assume "everywhere" and the tool will not correct them.
+
+**What is not encoded, and this is the important part:** nothing detects the ungated case
+from inside it. A session that does not read the registration also cannot be told by the
+registration that it is not reading it. In such a surface the only control is the standing
+instruction — *credits are mine, always ask before spending* — which is a person's rule
+honoured by an assistant, not a gate. It has held so far. It is not the same kind of thing
+as a gate and this ledger should not let the two blur.

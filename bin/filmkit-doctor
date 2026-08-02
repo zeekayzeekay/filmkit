@@ -244,9 +244,26 @@ def check(film, facts_path, r):
 
     r.add(WARN, "hook TRUSTED — not detectable from here",
           "Both hosts require you to approve a repo-committed hook before it runs.\n"
-          "Claude Code: the workspace trust prompt.   Codex: /hooks.\n"
+          "Claude Code: trust the folder on first run, then /hooks to see it listed\n"
+          "with its source file.   Codex: /hooks.\n"
           "Until then the registration is present, correct and INERT — and an inert\n"
-          "spend gate is indistinguishable from a permissive one. Confirm it yourself.")
+          "spend gate is indistinguishable from a permissive one. Confirm it yourself,\n"
+          "and confirm it by ATTEMPTING a generation and being refused: /hooks proves\n"
+          "the hook is loaded, not that the host consults it before spending.")
+
+    # WHICH SURFACES THIS COVERS, AND WHICH IT DOES NOT.
+    # A registration in this film's .claude/ is read by a host that opens this
+    # FOLDER. An assistant session running somewhere else -- a cloud session, a
+    # chat surface with the same MCP server attached -- never sees this file and
+    # is not gated by it. That is not a defect in the hook; it is the boundary of
+    # what a per-project file can do, and it was not written down anywhere until
+    # a generation could have been fired from an ungated surface.
+    r.add(WARN, "this gate covers a host that OPENS THIS FOLDER, and nothing else",
+          "Any assistant session with the same generation tools attached but a\n"
+          "different working directory — a cloud session, another machine, a chat\n"
+          "surface — does not read this registration and is not stopped by it.\n"
+          "In those, the only control is the person. Know which surface you are in\n"
+          "before you ask for a generation.")
 
     probe = json.dumps({"tool_name": "mcp__higgsfield__generate_video",
                         "cwd": str(film or pathlib.Path.cwd()),
