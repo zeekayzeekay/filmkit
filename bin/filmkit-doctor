@@ -119,6 +119,27 @@ def check(film, facts_path, r):
             r.add(WARN, "look_pack is not declared",
                   "Set it to a pack name or to null. Silence is not the same as none.")
 
+        # DOES THIS FILM TELL THE KIT ITS OWN FILENAMES?
+        # Until it does, the tools look for the names filmkit-init writes, find
+        # nothing, and report nothing found -- which, on a film with 74 findings
+        # in a differently-named ledger, is a false statement with a zero exit.
+        # Doctor's whole job is to name what is not wired, and this was not among
+        # the things it looked at.
+        u = subprocess.run([sys.executable, str(KIT / "tools" / "_project.py"),
+                            "--undeclared"], cwd=film, capture_output=True, text=True)
+        try:
+            roles = json.loads(u.stdout) if u.returncode else {}
+        except Exception:
+            roles = {}
+        if roles:
+            named = ", ".join(f"{k} -> {v['candidates'][0]}" for k, v in list(roles.items())[:3])
+            r.add(BAD, f"{len(roles)} document role(s) NOT declared: {named}",
+                  "The kit is looking for files this film does not have, while the files it\n"
+                  "does have sit right beside them. Propose the block:  filmkit-adopt\n"
+                  "Then write it:                                       filmkit-adopt --apply")
+        else:
+            r.add(OK, "every document role resolves to a file that exists")
+
     for host, rel in (("Claude Code", ".claude/skills"), ("Codex", ".agents/skills")):
         target = (film or pathlib.Path.cwd()) / rel
         if target.exists():

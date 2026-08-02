@@ -121,14 +121,84 @@ DEFAULT_FILES = {
 }
 
 
+def candidates(default):
+    """
+    Files in this film that look like the role's default under another name.
+
+    Matched on the TAIL of the name, case-insensitively, so `TARN_FINDINGS.md`
+    answers for `FINDINGS.md` and `tarn_shot_script.md` for `SHOT_SCRIPT.md`.
+    Deliberately narrow: this is not a guess at what the film meant. It is
+    evidence that the film HAS the thing and the kit is looking elsewhere.
+    """
+    stem = default.lower()
+    out = []
+    for f in sorted(_resolve()["DIR"].glob("*")):
+        n = f.name.lower()
+        if f.is_file() and n != stem and (n.endswith("_" + stem) or n.endswith(stem)):
+            out.append(f.name)
+    return out
+
+
+def undeclared():
+    """
+    Every role where the kit fell back to a default, the default is NOT there,
+    and something in the film answers to that name.
+
+    THE FAULT THIS EXISTS FOR
+    -------------------------
+    Pointed at an unmigrated film, `checklist.py` looked for `FINDINGS.md`, did
+    not find it, printed *"no findings ledger — that is correct for a film with
+    no faults recorded yet"*, wrote a checklist of nothing, and EXITED ZERO. The
+    film had 74 findings in `TARN_FINDINGS.md` in the same directory. `crossshot`
+    and `staleness` did the same on the script and the prompts.
+
+    Every word of that message was true of the file it looked for and false of
+    the film in front of it. An empty result with a green exit is indistinguish-
+    able from a clean one — the failure class this whole kit exists to remove.
+
+    Silence means 'nothing to find' only when there is nothing to find. When the
+    thing is visibly present under another name, silence is a misconfiguration,
+    and the tools refuse rather than report zero.
+    """
+    declared = _resolve()["FACTS"].get("_files", {})
+    out = {}
+    for role, default in DEFAULT_FILES.items():
+        if role in declared or not isinstance(default, str) or default.startswith("_"):
+            continue
+        if (_resolve()["DIR"] / default).exists():
+            continue
+        found = candidates(default)
+        if found:
+            out[role] = (default, found)
+    return out
+
+
+def _refuse_undeclared(role, default, found):
+    raise SystemExit(
+        "\n  ! this film does not declare its documents, and the kit is about to read "
+        "nothing.\n\n"
+        f"    role {role!r} resolves to {default}, which is not in "
+        f"{_resolve()['DIR']}.\n"
+        f"    But these are:  {', '.join(found)}\n\n"
+        "    Reporting zero here would look exactly like a clean result, so this is a\n"
+        "    refusal instead. Declare the film's own names once, in its facts file:\n\n"
+        f'        "_files": {{ "{role}": "{found[0]}", ... }}\n\n'
+        "    or let the kit propose the whole block:  filmkit-adopt --apply\n")
+
+
 def files(key):
     """A document this film uses, resolved against the FILM's directory."""
     if key not in DEFAULT_FILES:
         raise KeyError(f"_project.files({key!r}) — not a known document role. "
                        f"Known: {sorted(DEFAULT_FILES)}")
-    v = _resolve()["FACTS"].get("_files", {}).get(key, DEFAULT_FILES[key])
+    declared = _resolve()["FACTS"].get("_files", {})
+    v = declared.get(key, DEFAULT_FILES[key])
     if isinstance(v, list):
         return [_resolve()["DIR"] / x for x in v]
+    if key not in declared and not (_resolve()["DIR"] / v).exists():
+        found = candidates(v)
+        if found:
+            _refuse_undeclared(key, v, found)
     return _resolve()["DIR"] / v
 
 
@@ -221,3 +291,18 @@ def source_manifest():
     """
     m = KIT.parent / "tests" / "SOURCE_SHA256.txt"
     return m if m.exists() else None
+
+
+# ------------------------------------------------------------------- as a CLI --
+# So a gate can ask "is this film declared?" without importing the module into a
+# process that has a different film in its environment.
+if __name__ == "__main__":
+    if "--undeclared" in sys.argv:
+        try:
+            u = undeclared()
+        except SystemExit:
+            u = {}
+        print(json.dumps({r: {"expected": e, "candidates": c} for r, (e, c) in u.items()},
+                         indent=2))
+        sys.exit(1 if u else 0)
+    raise SystemExit(__doc__)

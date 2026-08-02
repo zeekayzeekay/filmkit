@@ -34,7 +34,7 @@ WHAT A CLEAN RUN DOES NOT PROVE
 That either version is CORRECT. It proves they are the same, which is exactly
 what an extraction should be and no more.
 """
-import argparse, json, pathlib, re, shutil, subprocess, sys, tempfile
+import argparse, json, os, pathlib, re, shutil, subprocess, sys, tempfile
 
 KIT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -162,6 +162,86 @@ def verify_sources(d):
     print(f"  {n} source file(s) verified against their manifest\n")
 
 
+def verify_declared(film):
+    """
+    Refuse a film that has not told the kit its own filenames.
+
+    The origin's tools hard-code this film's document names. The kit's resolve
+    them by ROLE and fall back to the names `filmkit-init` writes. Run against an
+    unmigrated film those are two different sets of files, and this gate then
+    reports seven tools DIFFER and calls each one an extraction bug — which is
+    the wrong verdict, loudly. The tools are fine; the film has not been adopted.
+
+    A gate that cannot tell a defect from a missing declaration must not guess
+    which it is looking at.
+    """
+    r = subprocess.run([sys.executable, str(KIT / "tools" / "_project.py"), "--undeclared"],
+                       cwd=film, capture_output=True, text=True)
+    if r.returncode == 0:
+        return
+    try:
+        roles = json.loads(r.stdout)
+    except Exception:
+        return
+    print(f"\n  ! {film.name} has not declared its documents — refusing to run.\n")
+    for role, d in roles.items():
+        print(f"    {role:12s} the kit looks for {d['expected']}; this film has "
+              f"{', '.join(d['candidates'])}")
+    print("\n    Compared in this state the two sides read DIFFERENT FILES, and every")
+    print("    difference would be reported as an extraction bug. Adopt the film first:")
+    print("\n        filmkit-adopt --apply\n")
+    raise SystemExit(2)
+
+
+# Suffixes a tool may READ and will never WRITE. Everything else is copied.
+# The default is COPY, not link, and that direction is the whole safety argument:
+# a text file wrongly linked would be rewritten through the link into the
+# operator's own film — preflight mutates fixtures in place and Python's write
+# truncates the inode. A binary wrongly copied costs disk and nothing else.
+LINKABLE = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".tif", ".tiff", ".bmp",
+            ".psd", ".mp4", ".mov", ".mkv", ".webm", ".wav", ".mp3", ".m4a",
+            ".zip", ".pdf", ".glb", ".ttf", ".otf"}
+
+
+def stage(film, dst):
+    """
+    Two working copies of a film, without two copies of its bytes.
+
+    A film is mostly picture. TARN is 2.7 GB of plates, candidates and proof
+    crops, and copying it whole twice made this gate cost 5.4 GB and many
+    minutes — expensive enough that the gate got pointed at a trimmed film
+    instead of the real one. That is not a hypothetical: it happened, and the
+    trimmed film was missing eight documents and carried three stale fixtures,
+    so the gate passed 34 invocations against a film that does not exist.
+
+    A gate too expensive to run on the real thing will be run on something else.
+    So the cost is the correctness problem, and this is the fix: images are
+    hard-linked, text is copied.
+    """
+    dst.mkdir(parents=True, exist_ok=True)
+    for src in sorted(film.rglob("*")):
+        rel = src.relative_to(film)
+        out = dst / rel
+        if src.is_dir():
+            out.mkdir(parents=True, exist_ok=True)
+            continue
+        out.parent.mkdir(parents=True, exist_ok=True)
+        if src.suffix.lower() in LINKABLE:
+            # hard link first; symlink when the staging area is on another device
+            # (it usually is — the film lives on the operator's disk and the temp
+            # dir does not); copy only when the host allows neither, which on
+            # Windows means Developer Mode is off.
+            for attempt in (os.link, os.symlink):
+                try:
+                    attempt(src, out)
+                    break
+                except OSError:
+                    continue
+            if out.exists():
+                continue
+        shutil.copy2(src, out)
+
+
 def run(tool_path, args, cwd):
     p = subprocess.run([sys.executable, str(tool_path), *args],
                        cwd=cwd, capture_output=True, text=True, timeout=900)
@@ -180,6 +260,7 @@ def main():
     origin = pathlib.Path(a.origin_scripts).resolve()
     film = pathlib.Path(a.film).resolve()
     verify_sources(origin)
+    verify_declared(film)
 
     tmp = pathlib.Path(tempfile.mkdtemp(prefix="dualrun-"))
     try:
@@ -188,8 +269,8 @@ def main():
         # fixtures. Sharing one directory would let each run see the other's
         # leavings, which is FK-04's fault deliberately reproduced.
         a_dir, b_dir = tmp / "origin", tmp / "kit"
-        shutil.copytree(film, a_dir)
-        shutil.copytree(film, b_dir)
+        stage(film, a_dir)
+        stage(film, b_dir)
         for f in origin.glob("*.py"):
             shutil.copy(f, a_dir / f.name)
         # The origin's tools hard-code THEIR film's facts filename — that is the

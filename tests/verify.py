@@ -131,6 +131,19 @@ def main():
 
         if real:
             print(f"\n  A REAL FILM — {real}")
+            # FIRST: can this kit read this film at all? An undeclared film makes
+            # every phase below measure files that are not there and report the
+            # emptiness as a result. The phase that eventually noticed was the
+            # acceptance gate, which called it seven extraction bugs.
+            # `--against DIR` accepts any directory; this is the check that the
+            # directory is the thing it claims to be.
+            u = subprocess.run([sys.executable, str(kit / "tools" / "_project.py"),
+                                "--undeclared"], cwd=real, capture_output=True, text=True)
+            if u.returncode:
+                FAIL.append(("the film has not declared its documents", "undeclared",
+                             u.stdout.strip().splitlines()[-8:]))
+                print("  !! film has not declared its documents         run: filmkit-adopt")
+                print("     Everything below reads files that are not there.\n")
             run([sys.executable, str(kit / "tools" / "preflight.py")], cwd=real,
                 expect_zero=False, name="preflight")
             run([sys.executable, str(kit / "tests" / "portability_test.py"), "--selftest"],

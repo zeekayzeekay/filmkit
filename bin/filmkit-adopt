@@ -1,0 +1,117 @@
+#!/usr/bin/env python3
+"""
+ADOPT AN EXISTING FILM — teach the kit this film's own filenames.
+
+    cd myfilm
+    filmkit-adopt              # propose, change nothing
+    filmkit-adopt --apply      # write the block into the facts file
+
+WHY THIS EXISTS
+---------------
+The kit resolves every document by ROLE — findings, script, prompts — and falls
+back to the names `filmkit-init` lays down. A film that predates the kit has its
+own names, and until it says so the kit reads files that are not there.
+
+That failure was not loud. Pointed at an unmigrated film, `checklist.py` looked
+for `FINDINGS.md`, printed *"no findings ledger — that is correct for a film with
+no faults recorded yet"*, wrote a checklist of nothing and exited ZERO. The film
+had 74 findings in `TARN_FINDINGS.md`, in the same directory. `crossshot` reported
+*"no block found — the script heading format may have changed"* for every shot,
+and `staleness` reported 0 headings against 23. Three tools, one cause, and all
+three green.
+
+The tools now REFUSE that situation rather than reporting zero. This command is
+how you get out of it.
+
+WHAT IT WILL NOT DO
+-------------------
+Guess. Where one candidate answers to a role it proposes it; where several do it
+prints them and stops, because picking the prompts ledger for somebody is exactly
+the kind of quiet decision this kit exists to prevent.
+"""
+import argparse, json, pathlib, sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "tools"))
+import _project as P  # noqa: E402
+
+G = "\033[92m"; R = "\033[91m"; Y = "\033[93m"; Z = "\033[0m"
+
+
+def propose():
+    """role -> (default, [candidates]) for everything the film has not declared."""
+    facts = P.FACTS
+    declared = facts.get("_files", {})
+    resolved, ambiguous, absent = {}, {}, []
+    for role, default in P.DEFAULT_FILES.items():
+        if role in declared or not isinstance(default, str) or default.startswith("_"):
+            continue
+        if (P.DIR / default).exists():
+            continue
+        found = P.candidates(default)
+        if len(found) == 1:
+            resolved[role] = found[0]
+        elif len(found) > 1:
+            ambiguous[role] = found
+        else:
+            absent.append((role, default))
+    return resolved, ambiguous, absent
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--apply", action="store_true", help="write the block into the facts file")
+    ap.add_argument("--pin", action="store_true",
+                    help="also pin kit_version and declare look_pack null if unset")
+    a = ap.parse_args()
+
+    resolved, ambiguous, absent = propose()
+    print(f"\n  FILMKIT ADOPT — {P.PATH.name} in {P.DIR}\n")
+
+    if not resolved and not ambiguous:
+        print(f"  {G}Every document role either resolves to a file that exists or has no")
+        print(f"  candidate in this film.{Z} Nothing to declare.\n")
+    for role, name in resolved.items():
+        print(f"  {G}->{Z} {role:12s} {P.DEFAULT_FILES[role]:20s} -> {name}")
+    for role, found in ambiguous.items():
+        print(f"  {R}??{Z} {role:12s} {P.DEFAULT_FILES[role]:20s} -> "
+              f"{len(found)} candidates, none chosen")
+        for f in found:
+            print(f"                                          {f}")
+    if absent:
+        print()
+        for role, default in absent:
+            print(f"  -- {role:12s} no {default} and nothing like it. If this film has one "
+                  f"under a\n     name that does not end in {default!r}, add it by hand.")
+
+    if ambiguous:
+        print(f"\n  {R}Refusing to choose.{Z} A role with several candidates is a question for you,")
+        print("  not a coin toss — and the wrong prompts ledger reads as a clean film with no")
+        print("  prompts in it. Add those roles by hand and re-run.")
+
+    if not a.apply:
+        if resolved or ambiguous:
+            print(f"\n  Nothing written. Re-run with --apply to write the {len(resolved)} "
+                  f"resolved role(s).\n")
+        return 1 if ambiguous else 0
+
+    facts = P.load()
+    block = dict(facts.get("_files", {}))
+    block.update(resolved)
+    facts["_files"] = block
+    written = [f"_files ({len(resolved)} role(s))"] if resolved else []
+    if a.pin:
+        if not facts.get("kit_version"):
+            facts["kit_version"] = P.kit_version()
+            written.append(f"kit_version = {facts['kit_version']}")
+        if "look_pack" not in facts:
+            facts["look_pack"] = None
+            written.append("look_pack = null")
+    P.save(facts)
+    print(f"\n  {G}wrote{Z} {P.PATH.name}: " + ", ".join(written or ["nothing to change"]))
+    print("\n  Now re-run the suite. The tools will read this film's real documents, and the")
+    print("  numbers they report should change — if they do not, the declaration did not take.\n")
+    return 1 if ambiguous else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
