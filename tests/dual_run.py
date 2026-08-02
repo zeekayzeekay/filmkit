@@ -115,10 +115,29 @@ def _divergences():
     if not f.exists():
         return {}
     d = json.loads(f.read_text(encoding="utf-8"))
-    return {x["tool"]: x for x in d.get("divergences", [])}
+    return d.get("divergences", [])
 
 
-DIVERGENT = _divergences()
+def in_force(entry, facts):
+    """
+    A divergence holds only while its stated CAUSE does.
+
+    Without this the entry excuses its tool from the comparison forever, and the
+    next real change in that tool lands inside an exemption somebody signed for
+    a different reason. Proven immediately: with the role declared as a single
+    ledger, `staleness` still showed as divergent -- and it was, by one line of
+    cosmetic formatting I had introduced and would not have seen.
+    """
+    w = entry.get("when")
+    if not w:
+        return True
+    v = (facts.get("_files") or {}).get(w.get("role"))
+    if w.get("declared_as") == "list":
+        return isinstance(v, list)
+    return v == w.get("declared_as")
+
+
+DIVERGENT_ALL = _divergences()
 
 
 def account_for(origin_line, kit_line, film_facts_name):
@@ -312,6 +331,10 @@ def main():
             print(f"  origin resolves its facts as {origin_facts!r}\n")
 
         facts_name = next((c.name for c in sorted(b_dir.glob("*_facts.json"))), "film_facts.json")
+        _f = next((c for c in sorted(b_dir.glob("*_facts.json"))), None)
+        _facts = json.loads(_f.read_text(encoding="utf-8")) if _f else {}
+        DIVERGENT = {x["tool"]: x for x in DIVERGENT_ALL if in_force(x, _facts)}
+        _dormant = [x["tool"] for x in DIVERGENT_ALL if not in_force(x, _facts)]
         invocations = TOOLS + lint_invocations(a_dir)
         print(f"  DUAL RUN — {len(invocations)} invocations, two copies of {film.name}\n")
         same = diff = declared = 0
@@ -374,6 +397,12 @@ def main():
                 print(f"    {frm}")
                 for line in __import__("textwrap").wrap(why, 74):
                     print(f"      {line}")
+            print()
+        if _dormant:
+            print("  DORMANT DIVERGENCES — declared, but their cause is not present in this")
+            print("  film, so these tools were held to exact agreement like any other:")
+            for tool in _dormant:
+                print(f"    {tool}")
             print()
         print("  WHAT THIS PROVES: the extraction changed nothing OBSERVABLE THROUGH THESE")
         print(f"  {same} CALLS. Not that the tools are identical — a differential test compares")

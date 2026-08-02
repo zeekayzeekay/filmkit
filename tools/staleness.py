@@ -130,9 +130,15 @@ def main():
 
     if "--list" in sys.argv:
         print()
+        # Group by ledger only when there is more than one. With a single file
+        # the listing must be byte-identical to what it has always been: a
+        # cosmetic change shows up in the acceptance gate as a difference, and
+        # a gate that has learned to expect a difference in a tool is a gate
+        # that will not notice the next one.
+        multi = len({fn for fn, _, _, _ in blks}) > 1
         last = None
         for fn, h, s, a in blks:
-            if fn != last:
+            if multi and fn != last:
                 print(f"\n  --- {fn}")
                 last = fn
             print(f"  {str(s):11s} {h[:74]}")
@@ -140,8 +146,13 @@ def main():
 
     from collections import Counter
     c = Counter(s or "UNMARKED" for _, _, s, _ in blks)
+    # Say "in N ledgers" only when there ARE several. A film with one prompts
+    # file must produce the SAME line it always produced -- a cosmetic change
+    # here shows up in the acceptance gate as a divergence, and a divergence
+    # somebody has already agreed to expect is a place a real change can hide.
     n_files = len({fn for fn, _, _, _ in blks})
-    print(f"\n  {len(blks)} headings in {n_files} ledger(s) · " + " · ".join(f"{n} {k}" for k, n in sorted(c.items())))
+    where = f" in {n_files} ledgers" if n_files > 1 else ""
+    print(f"\n  {len(blks)} headings{where} · " + " · ".join(f"{n} {k}" for k, n in sorted(c.items())))
 
     if bad:
         print(f"\n  {len(bad)} STALENESS VIOLATION(S):")

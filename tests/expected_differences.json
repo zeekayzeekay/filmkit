@@ -15,12 +15,21 @@
     {
       "tool": "staleness.py",
       "why": "The film declared its `prompts` role as FOUR ledgers. The origin's staleness hard-codes one of them, so three were never checked for a superseded block calling itself live. The kit reads all four, and also checks LIVE-role uniqueness ACROSS ledgers, which the origin could not do at all. The outputs therefore differ by design, and the origin's is the smaller of the two.",
-      "narrows": "staleness.py is no longer evidence that the extraction changed nothing. It is evidence of a change somebody asked for. Every other invocation still carries the original claim."
+      "narrows": "staleness.py is no longer evidence that the extraction changed nothing. It is evidence of a change somebody asked for. Every other invocation still carries the original claim.",
+      "when": {
+        "role": "prompts",
+        "declared_as": "list"
+      }
     },
     {
       "tool": "preflight.py",
       "why": "preflight RUNS staleness and prints its report, so it inherits the widened prompts role. Nothing in preflight itself changed.",
-      "narrows": "This is the expensive one. preflight is the largest tool in the kit and excluding it removes most of what a single acceptance run covers. The extraction evidence for this film is the run made at ADOPTION time, with the prompts role declared as the single ledger the origin read: 43 invocations, all agreeing. Keep that run. This one answers a different question \u2014 what widening the role changed \u2014 and answers it well."
+      "narrows": "This is the expensive one. preflight is the largest tool in the kit and excluding it removes most of what a single acceptance run covers. The extraction evidence for this film is the run made at ADOPTION time, with the prompts role declared as the single ledger the origin read: 43 invocations, all agreeing. Keep that run. This one answers a different question \u2014 what widening the role changed \u2014 and answers it well.",
+      "when": {
+        "role": "prompts",
+        "declared_as": "list"
+      }
     }
-  ]
+  ],
+  "_when": "A divergence is in force ONLY while its stated cause is. `when` names the condition -- here, that the film declared this role as several files. Without it the entry would excuse that tool from the comparison forever, and a real change would land inside an exemption somebody signed for a different reason."
 }
