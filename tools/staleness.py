@@ -62,26 +62,55 @@ def blocks():
         if not f.exists():
             continue
         lines = f.read_text(encoding="utf-8").splitlines()
+
+        # A FILE-LEVEL MARKER, above the first heading, applies to the whole
+        # file. Three of the origin project's four prompt ledgers open with
+        #
+        #     <!-- status: SUPERSEDED -->
+        #     > SUPERSEDED 1 Aug — DONE, do not run. ...
+        #
+        # and the first version of this reader only looked at the line AFTER a
+        # heading, so it called seventeen headings unmarked in files whose very
+        # first line marks them. Seventeen violations, none of them real, in a
+        # tool whose whole job is to be believed when it says something is
+        # stale. A false positive at that volume retires the tool.
+        file_status, file_attrs = None, ""
+        for l in lines:
+            if not l.strip():
+                continue
+            if re.match(r"^#{1,3} ", l):
+                break                       # a heading; no file-level marker
+            fm = re.match(r"<!--\s*status:\s*(\w+)(.*?)-->", l.strip())
+            if fm:
+                file_status, file_attrs = fm.group(1), fm.group(2)
+                break
+
         for i, l in enumerate(lines):
             m = re.match(r"^#{1,3} (.+?)\s*$", l)
             if not m:
                 continue
             nxt = lines[i + 1] if i + 1 < len(lines) else ""
             s = re.match(r"<!--\s*status:\s*(\w+)(.*?)-->", nxt.strip())
-            out.append((f.name, m.group(1), s.group(1) if s else None,
-                        s.group(2) if s else ""))
+            if s:
+                out.append((f.name, m.group(1), s.group(1), s.group(2), False))
+            else:
+                # inherited, and MARKED AS INHERITED. A heading that carries its
+                # own SUPERSEDED must name what replaced it; one that inherits
+                # the file's cannot, and demanding it per heading turns one
+                # missing fact into as many violations as the file has sections.
+                out.append((f.name, m.group(1), file_status, file_attrs, True))
     return out
 
 
 def main():
     bad, blks = [], blocks()
 
-    unmarked = [(fn, h) for fn, h, s, _ in blks if s is None or s == "UNMARKED"]
+    unmarked = [(fn, h) for fn, h, s, _, _ in blks if s is None or s == "UNMARKED"]
     for fn, h in unmarked:
         bad.append(f"{fn}: heading has no status marker: {h[:70]!r}")
 
     roles = {}
-    for fn, h, s, a in blks:
+    for fn, h, s, a, _inh in blks:
         if s == "LIVE":
             r = re.search(r"role:\s*(\S+)", a)
             roles.setdefault(r.group(1) if r else "?", []).append(f"{fn}: {h}")
@@ -89,12 +118,24 @@ def main():
         if len(hs) > 1:
             bad.append(f"{len(hs)} blocks claim to be LIVE for role {role}: {hs}")
 
-    for fn, h, s, a in blks:
+    for fn, h, s, a, inherited in blks:
         if s in ("SUPERSEDED", "INFO", "DRAFT") and CLAIMS_CURRENT.search(h):
             bad.append(f"a {s} heading still calls itself live/final/selected — this is the "
                        f"exact trap that put two edits in the wrong block: {h[:70]!r}")
-        if s == "SUPERSEDED" and "by:" not in a:
+        if s == "SUPERSEDED" and "by:" not in a and not inherited:
             bad.append(f"{fn}: SUPERSEDED block does not name its replacement: {h[:70]!r}")
+
+    # A file declared SUPERSEDED as a whole must say so once, and say what
+    # replaced it once. Once, not per heading.
+    for f in PROMPTS:
+        if not f.exists():
+            continue
+        inherited_here = [b for b in blks if b[0] == f.name and b[4]]
+        if inherited_here and inherited_here[0][2] == "SUPERSEDED" \
+                and "by:" not in inherited_here[0][3]:
+            bad.append(f"{f.name}: the whole file is marked SUPERSEDED and names no "
+                       f"replacement. Add by: to the file's status comment, or give the "
+                       f"blocks that are still worth reading their own marker.")
 
     archived = {p.name for p in ARCHIVE.glob("*.md")} if ARCHIVE.exists() else set()
     for f in LIVE_DOCS:
@@ -135,9 +176,9 @@ def main():
         # cosmetic change shows up in the acceptance gate as a difference, and
         # a gate that has learned to expect a difference in a tool is a gate
         # that will not notice the next one.
-        multi = len({fn for fn, _, _, _ in blks}) > 1
+        multi = len({fn for fn, _, _, _, _ in blks}) > 1
         last = None
-        for fn, h, s, a in blks:
+        for fn, h, s, a, _inh in blks:
             if multi and fn != last:
                 print(f"\n  --- {fn}")
                 last = fn
@@ -145,12 +186,12 @@ def main():
         print()
 
     from collections import Counter
-    c = Counter(s or "UNMARKED" for _, _, s, _ in blks)
+    c = Counter(s or "UNMARKED" for _, _, s, _, _ in blks)
     # Say "in N ledgers" only when there ARE several. A film with one prompts
     # file must produce the SAME line it always produced -- a cosmetic change
     # here shows up in the acceptance gate as a divergence, and a divergence
     # somebody has already agreed to expect is a place a real change can hide.
-    n_files = len({fn for fn, _, _, _ in blks})
+    n_files = len({fn for fn, _, _, _, _ in blks})
     where = f" in {n_files} ledgers" if n_files > 1 else ""
     print(f"\n  {len(blks)} headings{where} · " + " · ".join(f"{n} {k}" for k, n in sorted(c.items())))
 
