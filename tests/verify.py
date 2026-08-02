@@ -147,6 +147,8 @@ def main():
             cwd=tmp, name="doctor never claims the hook is trusted")
         run([sys.executable, str(kit / "tests" / "encoding_test.py")],
             cwd=tmp, name="tools survive a stdout that cannot encode them")
+        run([sys.executable, str(kit / "tests" / "status_test.py")],
+            cwd=tmp, name="each block status fires on its own text only")
 
         if real:
             print(f"\n  A REAL FILM — {real}")

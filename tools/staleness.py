@@ -18,19 +18,38 @@ The exposure, measured 31 Jul:
   · Nothing stopped a live document citing an archived one as though current.
 
 WHAT THIS ENFORCES
-  1. Every heading carries a machine-readable status: LIVE / SUPERSEDED / DRAFT / INFO.
-     DRAFT is for a prompt not yet fired — neither current nor dead. Without it,
-     future work gets mislabelled superseded and quietly disappears.
+  1. Every heading carries a machine-readable status:
+       LIVE        the one current version for its role
+       DRAFT       written, not yet fired — neither current nor dead. Without it,
+                   future work gets mislabelled superseded and quietly disappears.
+       SUPERSEDED  replaced by something else, which it must NAME
+       DONE        it RAN, it produced registered assets, and nothing replaced it
+       INFO        not a prompt
+     A file-level marker above the first heading applies to the whole file, and a
+     heading with its own marker overrides it.
+
+     DONE exists because SUPERSEDED was being made to carry two different facts.
+     A prompt that ran and produced a verified asset has not been replaced by
+     anything, and requiring it to name a successor asks the document to state
+     something untrue — which is the surest way to get a file that says whatever
+     satisfied the checker. DONE names what it PRODUCED instead, and every tag it
+     names must be in the ledger, so it is evidence rather than an escape hatch.
   2. Exactly ONE block is LIVE per role.
   3. No heading claims to be live in its TEXT unless it is marked LIVE — the
      words "live", "final", "selected" in a superseded heading are the trap.
-  4. Every SUPERSEDED block names what replaced it.
+  4. Every SUPERSEDED block names what replaced it; every DONE block names what
+     it produced, and those tags must exist in the facts ledger.
   5. No live document cites an archived file except through `_archive/`.
   6. Every withdrawn selection and every retracted claim stays flagged.
 
 Usage
   python3 staleness.py                 # report, exit 1 on any violation
   python3 staleness.py --list          # show every block and its status
+
+Status comment shapes:
+  <!-- status: LIVE role: k5_start -->
+  <!-- status: SUPERSEDED by: `k5-28` -->
+  <!-- status: DONE produced: @tarn_view_alt_1, @tarn_reverse_view -->
 """
 import json, pathlib, re, sys
 import _project as P  # FK1: where the film is
@@ -45,6 +64,13 @@ ARCHIVE = HERE / "_archive"
 LIVE_DOCS = [p.name for p in P.files("live_docs")]
 
 CLAIMS_CURRENT = re.compile(r"\blive\b|\bfinal\b|\bselected\b|\bcurrent\b", re.I)
+
+# A DONE block WAS selected and WAS the final version — those words are true of
+# it. What it must not claim is to be running now. Reusing CLAIMS_CURRENT here
+# would flag honest headings, and a rule that flags honest text gets switched
+# off.
+CLAIMS_RUNNING = re.compile(r"\blive\b|\bcurrent\b", re.I)
+TAG = re.compile(r"@[A-Za-z0-9_]+")
 
 
 def blocks():
@@ -122,8 +148,39 @@ def main():
         if s in ("SUPERSEDED", "INFO", "DRAFT") and CLAIMS_CURRENT.search(h):
             bad.append(f"a {s} heading still calls itself live/final/selected — this is the "
                        f"exact trap that put two edits in the wrong block: {h[:70]!r}")
+        if s == "DONE" and CLAIMS_RUNNING.search(h):
+            bad.append(f"{fn}: a DONE heading still calls itself live or current — it ran and "
+                       f"finished: {h[:70]!r}")
         if s == "SUPERSEDED" and "by:" not in a and not inherited:
             bad.append(f"{fn}: SUPERSEDED block does not name its replacement: {h[:70]!r}")
+
+    # ---- DONE must name what it produced, and the ledger must have it ------
+    # The whole value of DONE over SUPERSEDED is that it carries evidence. A DONE
+    # block naming nothing, or naming a tag that was never registered, is the
+    # escape hatch this status would otherwise be.
+    _assets = set()
+    if FACTS.exists():
+        _assets = set(json.loads(FACTS.read_text(encoding="utf-8")).get("assets", {}))
+    _seen_done = set()
+    for fn, h, s, a, inherited in blks:
+        if s != "DONE":
+            continue
+        key = fn if inherited else (fn, h)
+        if key in _seen_done:
+            continue
+        _seen_done.add(key)
+        where = f"{fn}: the whole file" if inherited else f"{fn}: {h[:60]!r}"
+        named = TAG.findall(a or "")
+        if "produced:" not in (a or "") or not named:
+            bad.append(f"{where} is marked DONE and names nothing it produced. "
+                       f"Add  produced: @tag[, @tag]  — DONE without evidence is "
+                       f"SUPERSEDED with the requirement removed.")
+            continue
+        unknown = [x for x in named if x not in _assets]
+        if unknown:
+            bad.append(f"{where} is marked DONE and claims to have produced "
+                       f"{', '.join(unknown)}, which the ledger does not have. A finished "
+                       f"prompt is finished because its output was REGISTERED.")
 
     # A file declared SUPERSEDED as a whole must say so once, and say what
     # replaced it once. Once, not per heading.

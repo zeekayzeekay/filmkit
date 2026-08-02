@@ -134,6 +134,7 @@ def main():
                           ("bin/filmkit-adopt", ["--help"]),
                           ("tests/snapshot_origin.py", []),
                           ("tests/dual_run.py", ["--help"]),
+                          ("tests/status_test.py", []),
                           ("tests/encoding_test.py", [])):
             # ...including itself, which is why the recursion stop exists. A test
             # exempt from its own check is the shape of the fault above.
