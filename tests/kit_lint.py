@@ -377,11 +377,16 @@ for _f in scripts():
 # --------------------------------------------------------------------------
 # LINE ENDINGS ARE PINNED, AND EVERY TRACKED TEXT FILE OBEYS.
 #
-# Measured on the operator's Windows machine: 56 files reported modified,
-# 10,661 insertions, 10,661 deletions, zero characters of content different.
-# `git status` becomes unreadable, `git merge --ff-only` refuses, and the two
-# hash manifests in this repo disagree with the files beside them -- because a
-# line ending is a byte and a manifest hashes bytes.
+# So that a clone on one platform is byte-identical to a clone on another, and a
+# reading taken from one machine describes the other. FK-16: an unpinned repo
+# made a cross-platform inspection report 56 modified files that were not
+# modified, and that reading became step 0 of a runbook telling the operator to
+# discard his working tree.
+#
+# This check is NOT here because CRLF breaks a tool in this kit. As far as I have
+# checked, it does not: neither manifest in tests/ is verified by content. It is
+# here so the repository stops being a thing whose bytes depend on who is
+# looking.
 # --------------------------------------------------------------------------
 _ga = KIT / ".gitattributes"
 if not _ga.exists():

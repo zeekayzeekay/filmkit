@@ -884,43 +884,66 @@ remaining sites.
 
 ---
 
-## FK-16 · THE DELIVERED KIT DID NOT PIN ITS LINE ENDINGS
+## FK-16 · I DIAGNOSED HIS MACHINE WITH A TOOL THAT DID NOT SHARE ITS CONFIGURATION
 
-<!-- guard: automatic   scope: delivery
-     ask: what does a fresh clone of this look like on the OTHER platform, byte for byte? -->
+<!-- guard: manual   scope: process
+     ask: when you inspected another machine's state, did the inspecting tool read the same configuration that machine reads? -->
 
-**What happened.** Checking the operator's clone over the desktop bridge before writing his
-next set of instructions, `git status` showed **56 files modified**. `git diff --stat` said
-10,661 insertions and 10,661 deletions. Content difference: none. Every file in the working
-tree had become CRLF.
+**This entry replaces an earlier version of FK-16 that was wrong.** The earlier text is
+retracted in full below, deliberately, because the retraction is the finding.
 
-There is no `.gitattributes` in the repository, so nothing ever said what a line ending
-should be, and the answer was left to whatever each machine happened to do.
+**What I did.** Before writing the operator's next runbook I checked his clone over the
+desktop bridge — which runs a Linux VM with his Windows folder mounted. `git status`
+reported **56 files modified**; `git diff --stat` said 10,661 insertions and 10,661
+deletions with no content difference. I concluded his working tree had been corrupted to
+CRLF, wrote it up as a finding, and made it **step 0 of a runbook that told him to run
+`git reset --hard`**.
 
-**Three consequences, in rising order.**
+**What was actually true.** His `core.autocrlf` is `true` — the Git-for-Windows default,
+set in his GLOBAL config. Windows git checks out CRLF and converts back to LF on the way in,
+so on his machine the tree reads **clean**. The Linux git I inspected with has a different
+`HOME`, never saw that global setting, and so reported a difference that is invisible — and
+harmless — on the machine that owns the files.
 
-1. `git status` is unreadable — a real edit hides among 56 false ones.
-2. `git merge --ff-only` refuses. **The next kit update cannot be pulled**, and the reason
-   given is about local changes that do not exist.
-3. `tests/SOURCE_SHA256.txt` and `tests/fixtures/manifest.json` hash FILES. A line ending
-   is a byte. A manifest that disagrees with the working tree beside it is FK-01 arriving
-   by a different road — and this time it would arrive on the operator's machine, silently,
-   through no action of his.
+**Three claims I published, and what each was worth:**
 
-**Why it had not shown up.** `verify.py` clones HEAD, and the index is LF, so every
-verification run this week measured LF files and was correct about them. The working tree
-is the one artefact `verify.py` deliberately does not test. That is the right design, and
-it is exactly why the working tree needed a check of its own.
+| claim | verdict |
+|---|---|
+| "`git status` is unreadable" | true only through my tool, on his machine it is clean |
+| "`git merge --ff-only` will refuse" | **false**. Windows git sees no local change |
+| "both hash manifests disagree with the files beside them" | **false, and unchecked**. `tests/fixtures/manifest.json` is DATA, never hashed. `tests/SOURCE_SHA256.txt` records the ORIGIN project's scripts and is not verified against anything in this repo. I asserted a consequence without opening either file |
 
-**Fix.** `.gitattributes` pins `* text=auto eol=lf`, the two hash manifests are marked
-`-text` so they are byte-exact by declaration rather than by inference, and `kit_lint` fails
-on a missing pin or on any tracked script containing CRLF.
+The third is the worst of them. I had the repository in front of me and reasoned about what
+a manifest must mean from its name.
 
-**The transferable rule.** *A repository that does not say what a byte is has agreed to
-differ between machines.* Line endings, file mode, and text encoding are all in this
-category: silence is not a default, it is a delegation — and the party it delegates to is
-the platform you did not develop on.
+**And the cost was nearly real.** `git reset --hard`, as step 0, on the strength of that.
+The diff genuinely was line endings only, so it would not have destroyed work — but that
+was luck operating downstream of a bad measurement, not care.
 
-**What is not encoded:** the repair on an already-converted clone is manual —
-`git reset --hard`, or `git add --renormalize .` if there is real local work mixed in.
-Nothing in the kit detects or repairs a clone from the outside.
+**What survives.** The repository really did pin no line endings, and pinning them is right:
+`.gitattributes` now sets `* text=auto eol=lf`, so every platform checks out identical bytes
+and a cross-platform inspection cannot produce this illusion again. `kit_lint` fails on a
+missing pin or a tracked file carrying CRLF. **But that is a small improvement discovered
+through a wrong diagnosis, and the ledger should not read as though the diagnosis was
+right.**
+
+A consequence to state plainly, since it is now caused by MY change rather than by any
+fault of his: `.gitattributes` overrides `core.autocrlf`, so after he pulls this commit his
+working tree WILL go dirty — genuinely this time — until one `git reset --hard`
+renormalises it to LF. That is a cost of the fix, and it belongs in the runbook as such
+rather than dressed up as a repair.
+
+**The transferable rule.** *A measurement of another machine is a measurement of your tool's
+view of it.* The bridge gave me a real `git status` from a real filesystem, and every byte it
+reported was accurate. The error was treating an accurate reading as the machine's own
+state, when the tool taking it did not read the configuration that governs the answer. Before
+reporting a remote state as fact: name what configuration the answer depends on, and check
+whether the instrument shares it.
+
+**And the second rule, which is older.** *Do not describe the consequence of a file you have
+not opened.* Two of my three claims were about files sitting in the working directory.
+
+**What is not encoded:** nothing detects a config mismatch between the inspecting tool and
+the inspected machine. There is no guard here and I do not know what one would look like —
+which is why this finding is `manual` and its question is aimed at me rather than at a
+script.
