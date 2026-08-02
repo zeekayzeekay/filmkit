@@ -34,7 +34,7 @@ WHAT A CLEAN RUN DOES NOT PROVE
 That either version is CORRECT. It proves they are the same, which is exactly
 what an extraction should be and no more.
 """
-import argparse, json, os, pathlib, re, shutil, subprocess, sys, tempfile
+import argparse, json, locale, os, pathlib, re, shutil, subprocess, sys, tempfile
 
 KIT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -287,9 +287,77 @@ def stage(film, dst):
         shutil.copy2(src, out)
 
 
-def run(tool_path, args, cwd):
+# EACH SIDE IS READ IN THE LANGUAGE IT SPEAKS.
+#
+# The two sets of scripts do not agree on an encoding, and they cannot be made
+# to. The kit's tools import `_utf8` and write UTF-8 on every platform. The
+# origin's tools are frozen pre-extraction code that writes whatever the host
+# locale says -- cp1252 on the operator's Windows machine -- and editing them is
+# the one thing this gate must never do.
+#
+# Decoding both with UTF-8 turned every `·` in the origin's output into an
+# escape and reported 31 tools as differing. Decoding both with the locale would
+# do the same to the kit in reverse. Forcing the origin to write UTF-8 through
+# the environment is FK-17: it changes what a process WRITES without changing
+# what its own parent READS, and the origin runs its own children.
+#
+# So the reader adapts, twice, and says which it used. That is the only place
+# with enough information to be right about both.
+HOST_ENC = locale.getpreferredencoding(False) or "utf-8"
+
+
+def verify_origin_runnable(origin, enc):
+    """
+    Refuse when THIS HOST cannot run the origin's scripts faithfully.
+
+    The origin's tools print characters -- an arrow, an em dash -- that a
+    non-Unicode host encoding cannot represent. Under such a locale they raise
+    UnicodeEncodeError partway through their reports and die, and this gate then
+    calls the wreckage thirty-one extraction bugs. It is not: it is the origin
+    being unable to run here at all.
+
+    Measured on the operator's Windows machine (cp1252) and reproduced exactly on
+    Linux under `LC_ALL=en_US.CP1252`: 31 tools "differ", and with a UTF-8 locale
+    the same two script sets agree on all 34.
+
+    THE REMEDY IS ONE VARIABLE, AND IT IS NOT THE OBVIOUS ONE.
+    `PYTHONIOENCODING` changes what a process WRITES and not what it READS, so it
+    fixes the child and breaks the parent -- that is FK-17, and it cost a day.
+    `PYTHONUTF8=1` is Python's UTF-8 Mode: it changes both, for the whole tree,
+    including `locale.getpreferredencoding()`, which is what `subprocess` consults.
+    """
+    if enc.lower().replace("-", "").replace("_", "") in ("utf8", "cp65001"):
+        return
+    bad = {}
+    for f in sorted(origin.glob("*.py")):
+        for ch in set(f.read_text(encoding="utf-8")):
+            try:
+                ch.encode(enc)
+            except (UnicodeEncodeError, LookupError):
+                bad.setdefault(f.name, set()).add(ch)
+    if not bad:
+        return
+    print(f"\n  ! this host reads and writes {enc!r}, and the origin's scripts print "
+          f"characters it cannot\n    represent — refusing to run.\n")
+    for name, chars in bad.items():
+        shown = " ".join(sorted(chars))
+        print(f"    {name:24s} {shown}")
+    print("\n    Under this encoding those scripts die partway through their reports, and this")
+    print("    gate would report the wreckage as extraction bugs. It is not an extraction")
+    print("    fault; it is the origin being unable to run on this host.\n")
+    print("    Re-run in Python's UTF-8 Mode, which changes what every process in the tree")
+    print("    both WRITES and READS:\n")
+    print("        PowerShell   $env:PYTHONUTF8=1")
+    print("        POSIX        PYTHONUTF8=1 python3 tests/dual_run.py ...\n")
+    print("    Not PYTHONIOENCODING. That changes writing only, so it fixes each child and")
+    print("    breaks the parent reading it — FK-17, found by this gate one line at a time.\n")
+    raise SystemExit(2)
+
+
+def run(tool_path, args, cwd, encoding):
     p = subprocess.run([sys.executable, str(tool_path), *args],
-                       cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="backslashreplace", timeout=900)
+                       cwd=cwd, capture_output=True, text=True,
+                       encoding=encoding, errors="backslashreplace", timeout=900)
     return p.stdout + p.stderr, p.returncode
 
 
@@ -298,6 +366,9 @@ def main():
     ap.add_argument("--origin-scripts", required=True)
     ap.add_argument("--film", required=True)
     ap.add_argument("--show", action="store_true", help="print the differing lines")
+    ap.add_argument("--origin-encoding", default=None,
+                    help="how the ORIGIN's scripts write their output. Defaults to this "
+                         "host's locale encoding, which is what they use.")
     ap.add_argument("--origin-facts", help="the facts filename the origin's scripts hard-code. "
                                            "Derived from their source when omitted.")
     a = ap.parse_args()
@@ -306,6 +377,7 @@ def main():
     film = pathlib.Path(a.film).resolve()
     verify_sources(origin)
     verify_declared(film)
+    verify_origin_runnable(origin, a.origin_encoding or HOST_ENC)
 
     tmp = pathlib.Path(tempfile.mkdtemp(prefix="dualrun-"))
     try:
@@ -335,6 +407,11 @@ def main():
         _facts = json.loads(_f.read_text(encoding="utf-8")) if _f else {}
         DIVERGENT = {x["tool"]: x for x in DIVERGENT_ALL if in_force(x, _facts)}
         _dormant = [x["tool"] for x in DIVERGENT_ALL if not in_force(x, _facts)]
+        origin_enc = a.origin_encoding or HOST_ENC
+        print(f"  reading origin as {origin_enc!r}, kit as 'utf-8'"
+              + ("   (same, so this run cannot show an encoding fault)"
+                 if origin_enc.lower().replace("-", "") in ("utf8", "utf_8") else "")
+              + "\n")
         invocations = TOOLS + lint_invocations(a_dir)
         print(f"  DUAL RUN — {len(invocations)} invocations, two copies of {film.name}\n")
         same = diff = declared = 0
@@ -345,8 +422,8 @@ def main():
                 continue
             if tool == "lint_prompt.py" and not (a_dir / args[0]).exists():
                 continue
-            out_a, rc_a = run(a_dir / tool, args, a_dir)
-            out_b, rc_b = run(KIT / "tools" / tool, args, b_dir)
+            out_a, rc_a = run(a_dir / tool, args, a_dir, origin_enc)
+            out_b, rc_b = run(KIT / "tools" / tool, args, b_dir, "utf-8")
             la, lb = normalise(out_a, a_dir), normalise(out_b, b_dir)
             label = f"{tool} {' '.join(args)}".strip()
             accounted = 0

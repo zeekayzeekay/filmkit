@@ -1047,3 +1047,63 @@ survives, on a real Windows machine, on text containing a character cp1252 lacks
 on this film. The gate would report it as a difference, correctly, and somebody would then
 have to declare it as a divergence — with the reason being that the kit was fixed and the
 origin was not.
+
+
+---
+
+## FK-18 · A DIFFERENTIAL TEST BETWEEN PROGRAMS THAT SPEAK DIFFERENT ENCODINGS
+
+<!-- guard: automatic   scope: process
+     ask: when two things are compared, is the COMPARER reading each of them in the language it actually speaks? -->
+
+**What happened.** Removing the environment variable that caused FK-17 took his acceptance
+run from **one** differing tool to **thirty-one**. Both numbers were wrong, and for opposite
+reasons.
+
+- With `PYTHONIOENCODING=utf-8` set: the origin's children wrote UTF-8, the origin's own
+  parents still decoded with the locale, and one line came back as mojibake. (FK-17.)
+- With it removed: the origin wrote cp1252 and was internally consistent again — but
+  `dual_run` decoded **both** sides as UTF-8, so every `·` in the origin's output became an
+  escape and thirty-one tools "differed".
+
+**Two programs, two encodings, and only one of them is mine to change.** The kit's tools
+import `_utf8` and write UTF-8 everywhere. The origin's tools are frozen pre-extraction code
+that writes whatever the host locale says. The comparer is the only thing with enough
+information to be right about both, so it now reads each side in the language it speaks and
+prints which it used.
+
+**And then a third thing, which is the real finding.** With the decoding fixed, a faithful
+reproduction still failed — because on a cp1252 host the origin's scripts print an arrow
+cp1252 cannot represent, so they **die partway through their own reports**. No amount of
+careful decoding fixes a process that crashed. The gate was calling that wreckage an
+extraction bug.
+
+It is not. **It is the origin being unable to run on that host at all**, and the gate must
+say so rather than produce a verdict. `dual_run` now scans the origin's source for
+characters the host encoding cannot represent and refuses, naming the files and the
+characters.
+
+**The remedy is one variable, and it is not the obvious one.**
+
+| | changes writing | changes reading |
+|---|---|---|
+| `PYTHONIOENCODING=utf-8` | yes | **no** — which is FK-17 |
+| `PYTHONUTF8=1` | yes | **yes**, including `locale.getpreferredencoding()`, which is what `subprocess` consults |
+
+**How it was verified, and this part matters.** Every earlier encoding fix in this kit was
+tested on a host where the two encodings coincide, so the tests could not see the fault.
+This one was reproduced properly: `localedef -i en_US -f CP1252 en_US.CP1252`, then the
+whole suite under `LC_ALL=en_US.CP1252`. Under that locale, 31 tools differ — the operator's
+number. Under the same locale with `PYTHONUTF8=1`, all 34 agree. A locale is generatable in
+one command, and I had been reasoning about a platform I could have simply borrowed.
+
+**The transferable rule.** *Reproduce the environment, do not model it.* Two earlier attempts
+at this fault were reasoned out from a description of Windows and both shipped broken. The
+third was measured under an encoding that behaves like his, and it took one command to
+arrange.
+
+**What is not encoded:** the refusal is triggered by characters the host cannot ENCODE. A
+host encoding that can represent everything the origin prints but maps it differently — a
+genuinely different code page rather than a smaller one — would pass the check and still
+compare wrongly. I have not thought of a way to detect that without running both sides
+first.

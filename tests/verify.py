@@ -176,6 +176,12 @@ def main():
             # The acceptance gate. It existed for one commit as a thing somebody
             # had to remember to run, which is not a gate.
             print("\n  ACCEPTANCE — the kit reproduces the origin project")
+            import locale as _loc
+            _e = _loc.getpreferredencoding(False) or "utf-8"
+            if _e.lower().replace("-", "") not in ("utf8", "cp65001"):
+                print(f"     this host reads {_e!r}. The origin's scripts print characters it")
+                print("     cannot represent, so the gate will refuse. Re-run the whole command")
+                print("     in UTF-8 Mode:   $env:PYTHONUTF8=1   (PowerShell)")
             run([sys.executable, str(kit / "tests" / "dual_run.py"),
                  "--origin-scripts", str(origin_scripts), "--film", str(real)],
                 cwd=kit, name="dual run against the origin's own scripts")
