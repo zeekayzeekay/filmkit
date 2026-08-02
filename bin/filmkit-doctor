@@ -126,7 +126,7 @@ def check(film, facts_path, r):
         # Doctor's whole job is to name what is not wired, and this was not among
         # the things it looked at.
         u = subprocess.run([sys.executable, str(KIT / "tools" / "_project.py"),
-                            "--undeclared"], cwd=film, capture_output=True, text=True)
+                            "--undeclared"], cwd=film, capture_output=True, text=True, encoding="utf-8", errors="backslashreplace")
         try:
             roles = json.loads(u.stdout) if u.returncode else {}
         except Exception:
@@ -191,7 +191,7 @@ def check(film, facts_path, r):
                         "cwd": str(film or pathlib.Path.cwd()),
                         "tool_input": {"prompt": "filmkit doctor probe — no receipt exists"}})
     p = subprocess.run([sys.executable, str(gate)], input=probe,
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, encoding="utf-8", errors="backslashreplace")
     denied = '"permissionDecision": "deny"' in p.stdout
     r.add(OK if (denied and p.returncode == 0) else BAD,
           "gate denies an unreceipted generation" if denied else

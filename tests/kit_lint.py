@@ -166,7 +166,7 @@ for f in scripts():
 # ---------------------------------------------------------------------------
 import json as _json, subprocess as _sp
 
-_tracked = set(_sp.run(["git", "ls-files"], capture_output=True, text=True,
+_tracked = set(_sp.run(["git", "ls-files"], capture_output=True, text=True, encoding="utf-8", errors="backslashreplace",
                        cwd=KIT).stdout.split())
 
 for man in (KIT / ".claude-plugin" / "plugin.json", KIT / ".codex-plugin" / "plugin.json"):
@@ -319,6 +319,42 @@ if _SKILLS.exists():
                  f"thing a host reads before deciding to load the skill.")
 
 
+# --------------------------------------------------------------------------
+# EVERY CAPTURING SUBPROCESS CALL PINS ITS ENCODING.
+#
+# `text=True` without `encoding=` decodes the child's bytes using the LOCALE.
+# On the operator's Windows machine `sys.stdout.encoding` is utf-8 and
+# `locale.getpreferredencoding()` is cp1252, and a pipe gets the second one. A
+# tool that prints an arrow then dies of UnicodeEncodeError halfway through its
+# report is read by its parent as a tool that had less to say.
+#
+# That is not hypothetical: `guard_coverage` reported three rules UNPROVEN on
+# Windows and zero on Linux, against byte-identical files.
+# --------------------------------------------------------------------------
+import ast as _ast
+
+for _f in scripts():
+    try:
+        _tree = _ast.parse(_f.read_text(encoding="utf-8"))
+    except SyntaxError:
+        continue
+    for _n in _ast.walk(_tree):
+        # PARSED, not grepped. The first version of this check was a regex, and
+        # it flagged its own error message -- which contains the string it looks
+        # for. That is FK-09 exactly: a check written with the thing it checks
+        # for. An AST sees calls and never sees the inside of a string literal.
+        if not (isinstance(_n, _ast.Call) and isinstance(_n.func, _ast.Attribute)
+                and _n.func.attr == "run"):
+            continue
+        _kw = {k.arg: k for k in _n.keywords if k.arg}
+        _texty = any(a in _kw for a in ("text", "universal_newlines"))
+        if _texty and "encoding" not in _kw:
+            fail("unpinned-encoding", f"{_f.parent.name}/{_f.name}",
+                 f"line {_n.lineno}: a capturing subprocess call with no encoding= decodes "
+                 f"the child using the HOST LOCALE. On Windows that is cp1252 while the "
+                 f'console is utf-8, and the child dies mid-report. Pass encoding="utf-8".')
+
+
 def main():
     # Count what is CHECKED, not what lives in tools/. The line said "16 tools"
     # while checking 26 files across four directories — a report that understates
@@ -337,7 +373,8 @@ def main():
         print("           import · unknown document roles · manifest paths present AND")
         print("           tracked · no empty directories · no env var in a hook")
         print("           registration · kit docs name no missing file · engine facts")
-        print("           still inside their expiry · skills conform to the open spec.\n")
+        print("           still inside their expiry · skills conform to the open spec ·")
+        print("           every capturing subprocess call pins its encoding.\n")
         print("  NOT checked: whether a rule is CORRECT, whether a threshold is right for")
         print("  your film, or whether a tool does what its docstring claims.\n")
         return 0

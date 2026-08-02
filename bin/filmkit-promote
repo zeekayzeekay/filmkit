@@ -128,13 +128,13 @@ def selftest():
             "# F\n\n## X-9 · A THING\n\n<!-- guard: manual  scope: process\n"
             "     ask: is this general? -->\n\nEvidence only.\n", encoding="utf-8")
         r = subprocess.run([sys.executable, str(pathlib.Path(__file__).resolve()), "X-9"],
-                           capture_output=True, text=True, cwd=film)
+                           capture_output=True, text=True, encoding="utf-8", errors="backslashreplace", cwd=film)
         good = r.returncode == 1 and "transferable rule" in r.stdout
         ok &= good
         print(f"  {'ok ' if good else '!! '}{'the command blocks and says why':34s} exit "
               f"{r.returncode}")
         r2 = subprocess.run([sys.executable, str(pathlib.Path(__file__).resolve()), "X-404"],
-                            capture_output=True, text=True, cwd=film)
+                            capture_output=True, text=True, encoding="utf-8", errors="backslashreplace", cwd=film)
         good2 = r2.returncode != 0 and "not in" in (r2.stdout + r2.stderr)
         ok &= good2
         print(f"  {'ok ' if good2 else '!! '}{'an unknown id is refused cleanly':34s} exit "

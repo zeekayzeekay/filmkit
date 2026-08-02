@@ -71,7 +71,7 @@ def rules_fired():
         if not f.exists():
             continue
         out = subprocess.run([sys.executable, P.tool("lint_prompt.py"), str(f)],
-                             capture_output=True, text=True, cwd=HERE).stdout
+                             capture_output=True, text=True, encoding="utf-8", errors="backslashreplace", cwd=HERE).stdout
         for h in re.findall(r"\[(?:ERROR|WARN|CHECK)\] ([a-z0-9:_-]+)", out):
             name = h.rstrip(":")
             if name.startswith("consistency"):

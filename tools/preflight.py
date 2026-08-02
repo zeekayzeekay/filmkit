@@ -108,7 +108,7 @@ def check_mutations():
 
 
 def run(cmd):
-    p = subprocess.run(cmd, capture_output=True, text=True, cwd=HERE)
+    p = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="backslashreplace", cwd=HERE)
     return p.returncode, p.stdout + p.stderr
 
 
@@ -232,7 +232,7 @@ def check_record(path):
     a failed assertion."""
     import subprocess as sp
     blank = sp.run([sys.executable, P.tool("checklist.py"), "--manual"],
-                   capture_output=True, text=True, cwd=HERE).stdout
+                   capture_output=True, text=True, encoding="utf-8", errors="backslashreplace", cwd=HERE).stdout
     items = re.findall(r"^## (M\d+) · (F-\d+|DECISION)", blank, re.M)
     print(f"\n=== MANUAL ITEMS — {len(items)}, derived from the findings ledger")
     p = HERE / path
@@ -299,7 +299,7 @@ def check_neighbours(prev, new, record):
     import subprocess
     print("\n=== SURVIVING SENTENCES — rewritten paragraphs, unchanged lines")
     r = subprocess.run([sys.executable, P.tool("stale_neighbours.py"), prev, new],
-                       capture_output=True, text=True, cwd=HERE)
+                       capture_output=True, text=True, encoding="utf-8", errors="backslashreplace", cwd=HERE)
     print(r.stdout.rstrip())
     n = 0
     for line in r.stdout.splitlines():
@@ -380,7 +380,7 @@ def check_crossshot(shot, record):
     import subprocess
     print(f"\n=== CROSS-SHOT — shot {shot} against its neighbours and the script")
     r = subprocess.run([sys.executable, P.tool("crossshot.py"), str(shot), "--quiet"],
-                       capture_output=True, text=True, cwd=HERE)
+                       capture_output=True, text=True, encoding="utf-8", errors="backslashreplace", cwd=HERE)
     print(r.stdout.rstrip())
     want = f"CROSSSHOT-CHECKED: {shot}"
     rec = (HERE / record).read_text(encoding="utf-8") if record and (HERE / record).exists() else ""

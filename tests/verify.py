@@ -40,7 +40,7 @@ FAIL = []
 
 
 def run(cmd, cwd, expect_zero=True, name=""):
-    p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=900)
+    p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="backslashreplace", timeout=900)
     out = p.stdout + p.stderr
     crashed = "Traceback (most recent call last)" in out
     bad = crashed or (expect_zero and p.returncode != 0)
@@ -56,11 +56,11 @@ def clone_head():
     tmp = pathlib.Path(tempfile.mkdtemp(prefix="filmkit-verify-"))
     dst = tmp / "kit"
     r = subprocess.run(["git", "clone", "-q", str(KIT), str(dst)],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, encoding="utf-8", errors="backslashreplace")
     if r.returncode:
         raise SystemExit(f"could not clone HEAD: {r.stderr}")
     dirty = subprocess.run(["git", "status", "--porcelain"], cwd=KIT,
-                           capture_output=True, text=True).stdout.strip()
+                           capture_output=True, text=True, encoding="utf-8", errors="backslashreplace").stdout.strip()
     if dirty:
         print("\n  \033[93mNOTE — the working tree has uncommitted changes.\033[0m")
         print("  They are NOT in this verification, because they are not in the deliverable.")
@@ -78,7 +78,7 @@ def fresh_film(root, kit):
     """
     film = root / "freshfilm"
     subprocess.run([sys.executable, str(kit / "bin" / "filmkit-init"), str(film),
-                    "--name", "freshfilm"], capture_output=True, text=True, timeout=300)
+                    "--name", "freshfilm"], capture_output=True, text=True, encoding="utf-8", errors="backslashreplace", timeout=300)
     return film
 
 
@@ -128,6 +128,8 @@ def main():
             cwd=tmp, name="promotion gates refuse what they should")
         run([sys.executable, str(kit / "bin" / "filmkit-doctor"), "--selftest"],
             cwd=tmp, name="doctor never claims the hook is trusted")
+        run([sys.executable, str(kit / "tests" / "encoding_test.py")],
+            cwd=tmp, name="tools survive a stdout that cannot encode them")
 
         if real:
             print(f"\n  A REAL FILM — {real}")
@@ -138,7 +140,7 @@ def main():
             # `--against DIR` accepts any directory; this is the check that the
             # directory is the thing it claims to be.
             u = subprocess.run([sys.executable, str(kit / "tools" / "_project.py"),
-                                "--undeclared"], cwd=real, capture_output=True, text=True)
+                                "--undeclared"], cwd=real, capture_output=True, text=True, encoding="utf-8", errors="backslashreplace")
             if u.returncode:
                 FAIL.append(("the film has not declared its documents", "undeclared",
                              u.stdout.strip().splitlines()[-8:]))

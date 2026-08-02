@@ -703,3 +703,61 @@ wearing a result's clothes.
 **What is not encoded:** the match is on the tail of the filename, case-insensitively. A film
 that calls its ledger `notes.md` gets no candidate and no refusal — it gets the reassuring
 sentence, correctly, because from the outside that film really does look like it has no ledger.
+
+---
+
+## FK-14 · THE TOOLS ASKED THE HOST'S LOCALE WHAT ALPHABET TO USE
+
+<!-- guard: automatic   scope: process
+     ask: name every point where this kit's behaviour could differ between two machines running identical bytes -->
+
+**What happened.** Two checks failed on the operator's Windows machine and passed on Linux
+against the same film, with every file re-hashed and byte-identical. `guard_coverage` reported
+three rules **UNPROVEN** on Windows and **zero** on Linux.
+
+One line of his output was the whole answer:
+
+```
+sys.stdout.encoding          utf-8      <- a console
+locale.getpreferredencoding  cp1252     <- a PIPE
+```
+
+Python takes a pipe's encoding from the second. Every tool in this kit runs other tools and
+captures their output, so **in normal operation the encoding is always the second one** — the
+first is what you see when you run a tool by hand, which is why it looked fine. `lint_prompt.py`
+prints `→` on its timecode lines. cp1252 has no `→`. The child raised UnicodeEncodeError partway
+through its report and died, and the parent read a truncated run as a short one.
+
+Not a crash the operator sees. Not an exception the parent notices. **A tool that dies mid-report
+is read as a tool with less to say** — a wrong answer wearing the shape of a right one.
+
+**This is FK-11's shape.** There it was `python3` resolved through PATH in the enforcement
+path. Here it is the text encoding resolved through the locale in the reporting path. Both are
+implicit host lookups; both fail on one platform only; both fail as a wrong answer rather than
+an error. Third instance of *a lookup in a path that must not depend on one*, and the first two
+were already written down.
+
+**Fix.**
+
+| | |
+|---|---|
+| `_project` at import | reconfigures stdout/stderr to UTF-8 and sets `PYTHONIOENCODING` for children. `setdefault`, so an operator who chose otherwise keeps it |
+| `hooks/gate.py` | reconfigures **stdin** too. The hook payload is UTF-8 JSON on a pipe; a prompt with an em dash would have arrived mangled, and the gate would have denied it for a nonsense reason |
+| 21 call sites | every capturing `subprocess.run` now pins `encoding="utf-8"` |
+| `kit_lint` | fails any capturing subprocess call with no `encoding=`, **parsed from the AST** — the first version was a regex and flagged its own error message, which is FK-09 again |
+| `tests/encoding_test.py` | reproduces the class on any platform and proves the harness is hostile before claiming anything |
+
+**Why the child's inheritance is a separate case.** `dual_run` runs the origin project's own
+scripts, which import nothing of ours. Fixing only our processes would have left the kit
+surviving where the origin died — and the acceptance gate would have reported that as an
+extraction difference. The instruction has to travel in the environment, not the import.
+
+**The transferable rule.** *A kit that claims to be portable owes a list of every point where
+two machines running identical bytes could behave differently.* Interpreter resolution and text
+encoding are both on it. The list is short and it is writable in advance, which means not
+writing it is a choice.
+
+**What is not encoded:** the test reproduces the CLASS — a stdout that cannot encode what the
+tools print — using an ASCII locale, because that is reproducible everywhere. cp1252 and ASCII
+fail for the same reason but they are not the same environment. Only the operator's machine can
+close that gap, and until it runs green there, this finding is diagnosed rather than confirmed.

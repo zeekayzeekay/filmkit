@@ -176,7 +176,7 @@ def verify_declared(film):
     which it is looking at.
     """
     r = subprocess.run([sys.executable, str(KIT / "tools" / "_project.py"), "--undeclared"],
-                       cwd=film, capture_output=True, text=True)
+                       cwd=film, capture_output=True, text=True, encoding="utf-8", errors="backslashreplace")
     if r.returncode == 0:
         return
     try:
@@ -244,7 +244,7 @@ def stage(film, dst):
 
 def run(tool_path, args, cwd):
     p = subprocess.run([sys.executable, str(tool_path), *args],
-                       cwd=cwd, capture_output=True, text=True, timeout=900)
+                       cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="backslashreplace", timeout=900)
     return p.stdout + p.stderr, p.returncode
 
 

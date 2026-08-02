@@ -368,7 +368,7 @@ def main():
     if div:
         import subprocess
         cmd = [sys.executable, P.tool("compare_asset.py"), a.tag, a.compared_with, "--property", a.prop]
-        r = subprocess.run(cmd, capture_output=True, text=True, cwd=str(HERE))
+        r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="backslashreplace", cwd=str(HERE))
         out = (r.stdout or "") + (r.stderr or "")
         print(out)
         if "comparison allowed" not in out:

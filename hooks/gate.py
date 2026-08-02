@@ -201,6 +201,18 @@ def main():
     """
     if "--selftest" in sys.argv:
         return selftest()
+    # The payload is UTF-8 JSON and it arrives on a PIPE. Python takes a pipe's
+    # encoding from the locale, which on the operator's Windows machine is
+    # cp1252 -- so a prompt carrying an em dash, a degree sign, or any of the
+    # thousands of characters cp1252 lacks would arrive mangled or raise here.
+    # It would be DENIED rather than let through, which is the right direction,
+    # but for a nonsense reason -- and a gate that refuses for nonsense reasons
+    # is one an operator learns to work around. The host writes UTF-8: say so.
+    for _s in (sys.stdin, sys.stdout, sys.stderr):
+        try:
+            _s.reconfigure(encoding="utf-8", errors="backslashreplace")
+        except Exception:
+            pass
     try:
         payload = json.load(sys.stdin)
     except Exception as e:
@@ -300,7 +312,7 @@ def selftest():
     def e2e(name, payload_text, cwd="/"):
         nonlocal ok
         r = _sp.run([sys.executable, str(pathlib.Path(__file__).resolve())],
-                    input=payload_text, capture_output=True, text=True, cwd=cwd)
+                    input=payload_text, capture_output=True, text=True, encoding="utf-8", errors="backslashreplace", cwd=cwd)
         denied = '"permissionDecision": "deny"' in r.stdout
         good = denied and r.returncode == 0
         if not good:

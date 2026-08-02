@@ -187,7 +187,7 @@ def selftest():
 
     import subprocess
     r = subprocess.run([sys.executable, str(pathlib.Path(__file__).resolve())],
-                       input="not json", capture_output=True, text=True, cwd="/")
+                       input="not json", capture_output=True, text=True, encoding="utf-8", errors="backslashreplace", cwd="/")
     good = r.returncode == 0
     ok &= good
     print(f"  {'ok ' if good else '!! '}unparseable payload costs the session nothing "

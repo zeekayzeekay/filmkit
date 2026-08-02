@@ -145,7 +145,7 @@ def rules_in(path, project=None):
     cmd = [sys.executable, P.tool("lint_prompt.py"), str(path)]
     if project:
         cmd += ["--project", str(project)]
-    out = subprocess.run(cmd, capture_output=True, text=True, cwd=P.DIR).stdout
+    out = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="backslashreplace", cwd=P.DIR).stdout
     names = set()
     for m in RULE_LINE.findall(out):
         n = m.rstrip(":")
