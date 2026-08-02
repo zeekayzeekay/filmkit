@@ -29,6 +29,9 @@ Usage
 import argparse, hashlib, pathlib, re, sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
+
+# For the side effect: stdout must not depend on the host locale (tools/_utf8.py).
+import _utf8  # noqa: F401,E402
 from lint_prompt import blocks
 
 

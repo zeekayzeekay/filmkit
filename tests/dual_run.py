@@ -38,6 +38,12 @@ import argparse, json, os, pathlib, re, shutil, subprocess, sys, tempfile
 
 KIT = pathlib.Path(__file__).resolve().parent.parent
 
+# The harnesses are not tools and do not import _project, so the fix that lives
+# there did not reach them -- and on Windows this very test crashed printing the
+# line that says the fix works. FK-14b.
+sys.path.insert(0, str(KIT / "tools"))
+import _utf8  # noqa: F401,E402
+
 # INVOCATIONS, not tools. A differential test compares the code paths its calls
 # reach, and nothing else. Proven: changing verify_asset's 6% scale threshold and
 # flipping a return code in staleness were both MISSED by the first version of

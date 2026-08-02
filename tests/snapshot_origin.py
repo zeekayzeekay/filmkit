@@ -26,6 +26,11 @@ reproduce them can be checked. Run it once, before migrating a film onto the kit
 and keep the snapshot.
 """
 import hashlib, pathlib, sys
+import sys, pathlib as _pl
+sys.path.insert(0, str(_pl.Path(__file__).resolve().parent.parent / "tools"))
+
+# For the side effect: stdout must not depend on the host locale (tools/_utf8.py).
+import _utf8  # noqa: F401,E402
 
 # The fourteen guard scripts a film carried before extraction, plus its facts
 # file. Named rather than globbed: a glob would sweep up whatever else happens to

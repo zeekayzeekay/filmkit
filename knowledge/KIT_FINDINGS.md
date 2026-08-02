@@ -761,3 +761,55 @@ writing it is a choice.
 tools print — using an ASCII locale, because that is reproducible everywhere. cp1252 and ASCII
 fail for the same reason but they are not the same environment. Only the operator's machine can
 close that gap, and until it runs green there, this finding is diagnosed rather than confirmed.
+
+---
+
+## FK-14b · THE FIX LIVED IN A MODULE THE TESTS DO NOT IMPORT
+
+<!-- guard: automatic   scope: process
+     ask: name the things that do NOT import the module your last fix lives in -->
+
+**What happened.** FK-14's fix was six lines inside `_project`. Every TOOL imports `_project` —
+`kit_lint` enforces exactly that. The HARNESSES do not: `verify.py`, `dual_run.py`,
+`kit_lint.py`, and `encoding_test.py` are not tools and have no film to resolve.
+
+So on the operator's machine the encoding test crashed **printing the line that says the fix
+works**:
+
+```
+UnicodeEncodeError: 'charmap' codec can't encode character '→'
+  ... encoding_test.py, line 66, in main
+      print(f"  {'ok ' if control_hostile else '!! '}control: the harness IS hostile "
+```
+
+And it passed here, because the test proved the mechanism using three stand-in scripts *it
+wrote itself* — each of which dutifully imported `_project`. It never ran a single thing that
+actually ships.
+
+**Two faults, and the second is the one to keep.**
+
+1. A fix placed in one module protects the importers of that module. `_utf8.py` is now its own
+   thing, imported first by every executable, and `kit_lint` fails any script that neither
+   imports it nor reconfigures its own streams.
+2. **A test that exercises the mechanism through fixtures it authored has tested the fixtures.**
+   `encoding_test` now runs the real entry points — `kit_lint`, `gate`, `session_start`,
+   `filmkit-promote`, `filmkit-doctor`, `filmkit-init`, `filmkit-adopt`, `snapshot_origin`,
+   `dual_run`, and itself — under the hostile locale, through a pipe. On the first run it
+   immediately found `filmkit-promote`, which imports `_project` lazily inside `main()` and so
+   printed its header before the hardening arrived. Nine call sites, one more fault, found in
+   the first second of running the real thing instead of a model of it.
+
+**And a third, from the same session.** `verify.py` kept the last six lines of a failure. A
+selftest prints its summary after its cases, so a doctor selftest with one bad case among
+fourteen reported six lines of epilogue and the word FAILED — and nothing about which case.
+Two round trips were spent asking a machine I cannot reach for output the tool already had and
+discarded. It now keeps the marked lines as well as the tail.
+
+**The transferable rule.** *After a fix, name what does NOT import it.* The set is usually
+small, usually includes the test harness, and is always writable in one line. And when a test
+constructs its own subject, say so in the test — a stand-in that imports the fix is not
+evidence about a program that does not.
+
+**What is not encoded:** the entry-point list in `encoding_test` is hand-maintained. A new
+executable added to `bin/` is covered by `kit_lint`'s structural check but not by the
+behavioural one until somebody adds it.

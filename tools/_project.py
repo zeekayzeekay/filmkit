@@ -33,38 +33,9 @@ resolves against it.
 """
 import json, os, pathlib, sys
 
-# --------------------------------------------------------------- the bytes --
-# THE HOST'S LOCALE IS NOT A PLACE TO KEEP A DEPENDENCY.
-#
-# On the operator's Windows machine:
-#
-#     sys.stdout.encoding        utf-8      <- a console
-#     locale.getpreferredencoding cp1252    <- a PIPE
-#
-# Python uses the second whenever stdout is not a terminal. Every tool in this
-# kit runs other tools and captures their output, so in normal operation the
-# encoding is always the second one — and `lint_prompt.py` prints `→`, which
-# cp1252 cannot represent. The child raises UnicodeEncodeError partway through
-# its report, dies, and the parent reads a truncated run as a complete one.
-#
-# Observed: `guard_coverage` reported three rules UNPROVEN on Windows and zero on
-# Linux, against the same film, byte-identical files. Nothing was wrong with the
-# rules. The report stopped early.
-#
-# This is FK-11's shape — an implicit host lookup inside a path that must not
-# depend on one. There it was `python3` resolved through PATH. Here it is the
-# text encoding resolved through the locale. Both fail on one platform only, and
-# both fail as a wrong ANSWER rather than an error.
-#
-# So: this process writes UTF-8 whatever it is attached to, and every child it
-# spawns inherits the instruction to do the same. Set with `setdefault`, so an
-# operator who has deliberately chosen something else keeps it.
-os.environ.setdefault("PYTHONIOENCODING", "utf-8")
-for _s in (sys.stdout, sys.stderr):
-    try:
-        _s.reconfigure(encoding="utf-8", errors="backslashreplace")
-    except Exception:
-        pass          # a stream that cannot be reconfigured is one we did not open
+# The stream encoding must not come from the host locale. See tools/_utf8.py --
+# imported for its side effect, first, before anything can print.
+import _utf8  # noqa: F401,E402
 
 _WARNED = set()
 

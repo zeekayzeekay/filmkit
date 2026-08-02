@@ -39,6 +39,11 @@ Usage
   python3 stale_neighbours.py OLD.txt NEW.txt --quiet     # exit code only
 """
 import argparse, difflib, pathlib, re, sys
+import sys, pathlib as _pl
+sys.path.insert(0, str(_pl.Path(__file__).resolve().parent))
+
+# For the side effect: stdout must not depend on the host locale (tools/_utf8.py).
+import _utf8  # noqa: F401,E402
 
 # Terms that make a surviving sentence WORTH READING. A sentence about grain or
 # colour rarely depends on where a man is standing; one about position,

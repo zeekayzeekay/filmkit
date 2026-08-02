@@ -354,6 +354,26 @@ for _f in scripts():
                  f"the child using the HOST LOCALE. On Windows that is cp1252 while the "
                  f'console is utf-8, and the child dies mid-report. Pass encoding="utf-8".')
 
+# --------------------------------------------------------------------------
+# EVERY EXECUTABLE HARDENS ITS OWN STREAMS.
+#
+# The first version of this fix lived inside `_project`, which every TOOL
+# imports -- `kit_lint` enforces that. It is not imported by the HARNESSES, so
+# the fix protected everything except the things that run the tests, and on the
+# operator's machine the encoding test crashed printing the line that says the
+# fix works. A fix in one module protects the importers of that module.
+# --------------------------------------------------------------------------
+for _f in scripts():
+    _src = _f.read_text(encoding="utf-8")
+    if _f.name == "_utf8.py":
+        continue                       # it IS the mechanism
+    if not ("import _utf8" in _src or "import _project" in _src
+            or 'reconfigure(encoding="utf-8"' in _src):
+        fail("unhardened-streams", f"{_f.parent.name}/{_f.name}",
+             "does not import _utf8 (directly or through _project) and does not reconfigure "
+             "its own streams, so its stdout encoding comes from the host locale. On Windows "
+             "that is cp1252 for a pipe, and the process dies partway through its report.")
+
 
 def main():
     # Count what is CHECKED, not what lives in tools/. The line said "16 tools"

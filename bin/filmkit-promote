@@ -33,6 +33,10 @@ import argparse, datetime, json, pathlib, re, sys
 
 KIT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(KIT / "tools"))
+# First, and for the side effect: stdout must not depend on the host locale.
+# This script imports _project lazily, inside main(), so the hardening that
+# lives there arrives AFTER the first print. FK-14b.
+import _utf8  # noqa: F401,E402
 sys.path.insert(0, str(KIT / "tests"))
 
 

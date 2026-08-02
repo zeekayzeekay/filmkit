@@ -33,6 +33,11 @@ at this fact revision, under this kit version, passed every gate, and a person
 signed the read. Nothing more.
 """
 import hashlib, json, pathlib, re
+import sys, pathlib as _pl
+sys.path.insert(0, str(_pl.Path(__file__).resolve().parent))
+
+# For the side effect: stdout must not depend on the host locale (tools/_utf8.py).
+import _utf8  # noqa: F401,E402
 
 DIRNAME = ".filmkit/receipts"
 STALE_AFTER_HOURS = 24

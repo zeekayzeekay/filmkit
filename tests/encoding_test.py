@@ -37,6 +37,12 @@ own tests. If the control passes, this test proves NOTHING and says so.
 import os, pathlib, subprocess, sys, tempfile
 
 KIT = pathlib.Path(__file__).resolve().parent.parent
+
+# The harnesses are not tools and do not import _project, so the fix that lives
+# there did not reach them -- and on Windows this very test crashed printing the
+# line that says the fix works. FK-14b.
+sys.path.insert(0, str(KIT / "tools"))
+import _utf8  # noqa: F401,E402
 ARROW = "→"
 
 HOSTILE = {**os.environ, "LC_ALL": "C", "LANG": "C",
@@ -108,6 +114,39 @@ def main():
         print(f"  {'ok ' if good else '!! '}a child that imports nothing of ours inherits it")
         if not good:
             print(f"       {(r.stdout + r.stderr).strip()[-300:]}")
+
+        # 4. THE REAL ENTRY POINTS, not stand-ins. Cases 1-3 test the mechanism
+        #    with scripts this file wrote, which is how the first version passed
+        #    on Linux while the shipped harnesses were unprotected — the fix
+        #    lived in `_project`, and the harnesses do not import it. On the
+        #    operator's machine THIS FILE then crashed printing the line that
+        #    says the fix works.
+        #
+        #    So: run the things that actually ship, under the hostile locale,
+        #    through a pipe.
+        for rel, args in () if os.environ.get("FILMKIT_ENCODING_CHILD") else (
+                         ("tests/kit_lint.py", []),
+                          ("hooks/gate.py", ["--selftest"]),
+                          ("hooks/session_start.py", ["--selftest"]),
+                          ("bin/filmkit-promote", ["--selftest"]),
+                          ("bin/filmkit-doctor", ["--selftest"]),
+                          ("bin/filmkit-init", ["--help"]),
+                          ("bin/filmkit-adopt", ["--help"]),
+                          ("tests/snapshot_origin.py", []),
+                          ("tests/dual_run.py", ["--help"]),
+                          ("tests/encoding_test.py", [])):
+            # ...including itself, which is why the recursion stop exists. A test
+            # exempt from its own check is the shape of the fault above.
+            r = subprocess.run([sys.executable, str(KIT / rel), *args],
+                               env={**HOSTILE, "FILMKIT_ENCODING_CHILD": "1"},
+                               capture_output=True, text=True, encoding="utf-8",
+                               errors="backslashreplace", timeout=300)
+            blob = r.stdout + r.stderr
+            good = "UnicodeEncodeError" not in blob and "UnicodeDecodeError" not in blob
+            ok &= good
+            print(f"  {'ok ' if good else '!! '}{rel:26s} survives a hostile locale")
+            if not good:
+                print(f"       {blob.strip().splitlines()[-1][:100]}")
 
     print()
     if ok:

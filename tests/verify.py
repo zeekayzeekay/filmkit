@@ -36,6 +36,12 @@ traceback shows up is a directory where nothing has accumulated.
 import json, pathlib, shutil, subprocess, sys, tempfile
 
 KIT = pathlib.Path(__file__).resolve().parent.parent
+
+# The harnesses are not tools and do not import _project, so the fix that lives
+# there did not reach them -- and on Windows this very test crashed printing the
+# line that says the fix works. FK-14b.
+sys.path.insert(0, str(KIT / "tools"))
+import _utf8  # noqa: F401,E402
 FAIL = []
 
 
@@ -45,8 +51,19 @@ def run(cmd, cwd, expect_zero=True, name=""):
     crashed = "Traceback (most recent call last)" in out
     bad = crashed or (expect_zero and p.returncode != 0)
     if bad:
+        # THE FAILING LINES, then the tail. The first version kept the last six
+        # lines only, and a selftest prints its summary AFTER its cases -- so for
+        # a doctor selftest with one bad case among fourteen, the report showed
+        # six lines of epilogue and the word FAILED, and not one word about WHICH
+        # case. Two round trips were spent on a machine I cannot reach asking for
+        # output this tool already had and threw away.
+        lines = out.strip().splitlines()
+        marked = [ln for ln in lines
+                  if ln.lstrip().startswith("!!") or ln.lstrip().startswith("FAIL")
+                  or "Error" in ln]
+        tail = [ln for ln in lines[-6:] if ln not in marked]
         FAIL.append((name, "traceback" if crashed else f"exit {p.returncode}",
-                     out.strip().splitlines()[-6:]))
+                     marked[:10] + tail))
     print(f"  {'ok ' if not bad else '!! '}{name:46s} exit {p.returncode}"
           f"{'  TRACEBACK' if crashed else ''}")
     return out
