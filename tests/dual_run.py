@@ -135,10 +135,30 @@ def verify_sources(d):
             "    fifteen files and served six from a two-day-old snapshot. An acceptance gate\n"
             "    run on stale sources certifies the kit against a film that no longer exists.\n"
             "    Hash at the source, in the same operation that copies.\n")
-    r = subprocess.run(["sha256sum", "-c", man.name], cwd=d, capture_output=True, text=True)
-    if r.returncode != 0:
-        raise SystemExit(f"\n  ! source files do not match their manifest:\n{r.stdout}{r.stderr}\n")
-    n = len([l for l in r.stdout.splitlines() if l.strip()])
+    # Verified IN PYTHON, not by shelling out to sha256sum. The kit is meant to
+    # run under Claude Code and Codex on Windows as well as here, and sha256sum
+    # is not a Windows command — the acceptance gate would have died on the one
+    # machine it most needs to work on. Same class as FK-11: an external lookup
+    # in a path that must not depend on one.
+    import hashlib
+    bad, n = [], 0
+    for line in man.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        want, _, name = line.partition("  ")
+        name = name.strip()
+        f = d / name
+        if not f.exists():
+            bad.append(f"{name}: MISSING")
+            continue
+        got = hashlib.sha256(f.read_bytes()).hexdigest()
+        n += 1
+        if got != want:
+            bad.append(f"{name}: FAILED — manifest {want[:12]}, file {got[:12]}")
+    if bad:
+        raise SystemExit("\n  ! source files do not match their manifest:\n    "
+                         + "\n    ".join(bad) + "\n")
     print(f"  {n} source file(s) verified against their manifest\n")
 
 

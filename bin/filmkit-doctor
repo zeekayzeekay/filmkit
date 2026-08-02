@@ -125,9 +125,13 @@ def check(film, facts_path, r):
             n = len([x for x in target.iterdir() if (x / "SKILL.md").exists()])
             r.add(OK if n else WARN, f"{host}: {n} skill(s) visible at {rel}")
         else:
+            import os as _os
+            how = (f'mklink /D "{target}" "{KIT / "skills"}"   (cmd, as Administrator '
+                   f'or with Developer Mode on)' if _os.name == "nt"
+                   else f"ln -s {KIT / 'skills'} {target}")
             r.add(WARN, f"{host}: no {rel}",
-                  f"Skills live in the kit at skills/. Link them:\n"
-                  f"ln -s {KIT / 'skills'} {target}")
+                  f"Skills live in the kit at skills/. Link them:\n{how}\n"
+                  f"Do NOT copy them — a copy is a fork, and the kit is the single source.")
 
     if film:
         for host, path in (("Claude Code", film / ".claude" / "settings.json"),

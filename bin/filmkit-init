@@ -114,8 +114,13 @@ def main():
                 # than linking -- it forks the skills -- so say so rather than
                 # quietly making a copy that will drift.
                 print(f"  !! could not link {rel} ({e}).")
-                print(f"     Point the host at {KIT / 'skills'} yourself; do NOT copy them,")
-                print("     because a copy is a fork and the kit is the single source.")
+                if os.name == "nt":
+                    print(f'     Windows needs Developer Mode or an elevated shell:')
+                    print(f'       mklink /D "{link}" "{KIT / "skills"}"')
+                else:
+                    print(f"       ln -s {KIT / 'skills'} {link}")
+                print("     Do NOT copy them — a copy is a fork, and the kit is the single "
+                      "source.")
 
     # the hook registrations, generated with absolute paths
     subprocess.run([sys.executable, str(KIT / "bin" / "filmkit-doctor"), "--install"],
