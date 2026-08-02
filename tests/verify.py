@@ -69,14 +69,16 @@ def clone_head():
     return tmp, dst
 
 
-def fresh_film(root):
+def fresh_film(root, kit):
+    """
+    Build it with the COMMAND a person would run, not by copying the template.
+    The first version copied templates/new-project directly, which tested a
+    directory layout nobody creates that way and left filmkit-init — the very
+    first thing anyone types — completely unexercised.
+    """
     film = root / "freshfilm"
-    shutil.copytree(KIT / "templates" / "new-project", film)
-    facts = film / "film_facts.json"
-    d = json.loads(facts.read_text(encoding="utf-8"))
-    d["kit_version"] = json.loads(
-        (KIT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))["version"]
-    facts.write_text(json.dumps(d, indent=2), encoding="utf-8")
+    subprocess.run([sys.executable, str(kit / "bin" / "filmkit-init"), str(film),
+                    "--name", "freshfilm"], capture_output=True, text=True, timeout=300)
     return film
 
 
@@ -100,7 +102,7 @@ def main():
             name="gate decides every case")
 
         print("\n  A CLEAN FILM — tools must RUN and report, never raise")
-        film = fresh_film(tmp)
+        film = fresh_film(tmp, kit)
         for tool, args, zero in (
             ("shotmap.py", [], False),
             ("verify_asset.py", ["--audit"], False),
@@ -114,6 +116,9 @@ def main():
             run([sys.executable, str(kit / "tools" / tool), *args], cwd=film,
                 expect_zero=zero, name=f"{tool} {' '.join(args)}".strip())
 
+        run([sys.executable, str(kit / "bin" / "filmkit-doctor")], cwd=film,
+            expect_zero=False, name="doctor reports the film's wiring")
+
         print("\n  SELFTESTS THAT NEED NO FILM")
         run([sys.executable, str(kit / "tools" / "verify_asset.py"), "--selftest"],
             cwd=film, name="counting detector discriminates")
@@ -121,6 +126,8 @@ def main():
             cwd=tmp, name="state loader briefs and fails silent")
         run([sys.executable, str(kit / "bin" / "filmkit-promote"), "--selftest"],
             cwd=tmp, name="promotion gates refuse what they should")
+        run([sys.executable, str(kit / "bin" / "filmkit-doctor"), "--selftest"],
+            cwd=tmp, name="doctor never claims the hook is trusted")
 
         if real:
             print(f"\n  A REAL FILM — {real}")

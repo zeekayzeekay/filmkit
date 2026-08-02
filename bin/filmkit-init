@@ -1,3 +1,139 @@
 #!/usr/bin/env python3
-"""filmkit-init — implemented in FK7 (init, doctor) / FK6 (promote)."""
-raise SystemExit("not implemented yet")
+"""
+START A FILM.
+
+    filmkit-init ../myfilm --name myfilm
+
+Lays down the smallest thing the kit can work with, wires both hosts, and then
+tells you the truth about what is still missing — because a scaffold that looks
+finished is a scaffold you will fire a generation from.
+
+WHAT IT WRITES
+--------------
+    film_facts.json      pinned to this kit version, look_pack declared as null
+    SHOT_SCRIPT.md       the script, with the two-way rule written at the top
+    FINDINGS.md          empty, with the metadata block a finding must carry
+    PROMPTS.md           empty
+    RUN_RECORD.md        empty
+    .claude/ .codex/     hook registrations, absolute paths, via filmkit-doctor
+    .claude/skills       symlinked to the kit's skills, and .agents/skills too
+
+WHAT IT DOES NOT DO
+-------------------
+Pretend the film is ready. A new film has no assets, no shots and no findings, so
+every gate that can fail will fail — and it prints exactly which, because the
+alternative is a green scaffold that goes red the moment you do real work and
+teaches you to distrust the gates on day one.
+"""
+import argparse, json, os, pathlib, shutil, subprocess, sys
+
+KIT = pathlib.Path(__file__).resolve().parent.parent
+
+SCRIPT_HEADER = """# SHOT SCRIPT
+
+Every shot here needs a row in `film_facts.json > shot_requirements`, and every row
+needs a shot here. `shotmap.py` compares BOTH directions and reports either as
+`uncovered`:
+
+  - a shot in this script with no row is invisible to every check in the kit
+  - a row for a shot this script dropped is a build order for nothing
+
+Each shot heading is `### SHOT <n> — <title>`.
+"""
+
+FINDINGS_HEADER = """# FINDINGS
+
+Faults that have cost something on this film. **A finding is not closed until it has
+a guard and a fixture.** If it cannot be automated it becomes a `manual` item with a
+written question, and `preflight` will not pass without an answer.
+
+Each entry needs this block, which is what `checklist.py` derives the review list
+from — there is no second place to update:
+
+```
+## F-01 · WHAT HAPPENED, IN ONE LINE
+
+<!-- guard: automatic|manual   scope: prompt|asset|frames|process|delivery
+     ask: the question a reviewer must answer in writing -->
+```
+
+Add a **The transferable rule.** paragraph when the lesson outlives this film.
+`filmkit-promote` refuses to copy a finding into the kit without one, because a
+finding with no rule promotes a story rather than a lesson.
+"""
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("directory")
+    ap.add_argument("--name", help="the film's name; defaults to the directory name")
+    a = ap.parse_args()
+
+    dest = pathlib.Path(a.directory).resolve()
+    name = a.name or dest.name
+    dest.mkdir(parents=True, exist_ok=True)
+
+    facts_path = dest / "film_facts.json"
+    if facts_path.exists():
+        raise SystemExit(f"\n  ! {facts_path} already exists. This is a film already; "
+                         f"filmkit-doctor will tell you what it is missing.\n")
+
+    version = json.loads((KIT / ".claude-plugin" / "plugin.json")
+                         .read_text(encoding="utf-8"))["version"]
+    facts = json.loads((KIT / "templates" / "new-project" / "film_facts.json")
+                       .read_text(encoding="utf-8"))
+    facts["kit_version"] = version
+    facts["look_pack"] = None
+    facts["film_name"] = name
+    facts["open_decisions"] = []
+    facts_path.write_text(json.dumps(facts, indent=2) + "\n", encoding="utf-8")
+
+    for fname, body in (("SHOT_SCRIPT.md", SCRIPT_HEADER),
+                        ("FINDINGS.md", FINDINGS_HEADER),
+                        ("PROMPTS.md", "# PROMPTS\n"),
+                        ("RUN_RECORD.md", "# RUN RECORD\n")):
+        p = dest / fname
+        if not p.exists():
+            p.write_text(body, encoding="utf-8")
+
+    print(f"\n  FILMKIT INIT — {name} at {dest}\n")
+    for f in sorted(dest.iterdir()):
+        if f.is_file():
+            print(f"  wrote {f.name}")
+
+    # skills, in both hosts' locations
+    for rel in (".claude/skills", ".agents/skills"):
+        link = dest / rel
+        link.parent.mkdir(parents=True, exist_ok=True)
+        if not link.exists():
+            try:
+                link.symlink_to(KIT / "skills", target_is_directory=True)
+                print(f"  linked {rel} -> {KIT / 'skills'}")
+            except OSError as e:
+                # Windows without developer mode cannot symlink. Copying is worse
+                # than linking -- it forks the skills -- so say so rather than
+                # quietly making a copy that will drift.
+                print(f"  !! could not link {rel} ({e}).")
+                print(f"     Point the host at {KIT / 'skills'} yourself; do NOT copy them,")
+                print("     because a copy is a fork and the kit is the single source.")
+
+    # the hook registrations, generated with absolute paths
+    subprocess.run([sys.executable, str(KIT / "bin" / "filmkit-doctor"), "--install"],
+                   cwd=dest)
+
+    print("  WHAT IS STILL MISSING — and it should be:\n")
+    print("    · no assets. Build a location plate before writing any prompt;")
+    print("      shotmap will refuse a shot whose camera axis no plate covers.")
+    print("    · no shot rows. Every shot needs one, with a LOAD-BEARING relationship")
+    print("      and a camera axis, or it can only be inventoried and not reviewed.")
+    print("    · no findings, so no manual review items yet. They arrive when")
+    print("      something costs you.")
+    print("    · the hook is registered and NOT YET TRUSTED. Until you approve it,")
+    print("      it is inert — and an inert spend gate looks exactly like a")
+    print("      permissive one.\n")
+    print("  Run  filmkit-doctor  from inside the film whenever you want the truth.\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

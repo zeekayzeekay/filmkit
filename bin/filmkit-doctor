@@ -1,3 +1,265 @@
 #!/usr/bin/env python3
-"""filmkit-doctor — implemented in FK7 (init, doctor) / FK6 (promote)."""
-raise SystemExit("not implemented yet")
+"""
+IS THIS MACHINE ACTUALLY WIRED UP?
+
+    filmkit-doctor              report what is wired and what is not
+    filmkit-doctor --install    write both hosts' hook registrations into this film
+
+WHY THIS EXISTS
+---------------
+Everything else in this kit can be verified from inside the kit. This cannot.
+Whether a host loads the skills, whether it invokes the hook, and whether the
+operator has TRUSTED that hook are three facts that live on a machine, and an
+unwired kit behaves exactly like a wired one right up until it does not.
+
+REGISTERED AND TRUSTED ARE DIFFERENT STATES
+-------------------------------------------
+Both hosts require the operator to approve a repo-committed hook before it runs.
+Until then the registration is present, correct, and **inert** -- and an inert
+spend gate is indistinguishable from a permissive one from the inside. So this
+tool reports them separately and never conflates them. It can detect the first.
+It cannot grant, or even see, the second: it says so rather than guessing.
+
+WHY THE REGISTRATION IS GENERATED
+---------------------------------
+The first scaffold shipped two hand-written registrations, one interpolating a
+Codex plugin-root variable that was a GUESS. A hook command that fails to expand
+is a hook FAILURE, and both hosts treat a hook failure as *let the call through*.
+A guessed variable in the enforcement path produces a gate that silently is not
+one. `--install` writes an absolute path instead, so there is no variable and
+therefore no guess.
+"""
+import argparse, json, pathlib, subprocess, sys
+
+KIT = pathlib.Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(KIT / "tools"))
+
+OK, WARN, BAD = "ok ", "?? ", "!! "
+
+
+class Report:
+    def __init__(self):
+        self.rows, self.bad = [], 0
+
+    def add(self, state, what, detail=""):
+        if state == BAD:
+            self.bad += 1
+        self.rows.append((state, what, detail))
+
+    def show(self):
+        for state, what, detail in self.rows:
+            colour = {OK: "\033[92m", WARN: "\033[93m", BAD: "\033[91m"}[state]
+            print(f"  {colour}{state}\033[0m{what}")
+            if detail:
+                for line in detail.split("\n"):
+                    print(f"       {line}")
+
+
+def find_film(start="."):
+    d = pathlib.Path(start).resolve()
+    for cand in [d] + list(d.parents):
+        if (cand / "film_facts.json").exists():
+            return cand, cand / "film_facts.json"
+        found = sorted(cand.glob("*_facts.json"))
+        if len(found) == 1:
+            return cand, found[0]
+    return None, None
+
+
+def registration(gate_dir):
+    tmpl = json.loads((KIT / "hooks" / "registration" / "gate.template.json")
+                      .read_text(encoding="utf-8"))
+    body = json.dumps(tmpl).replace("__GATE_PATH__", str(gate_dir).replace("\\", "\\\\"))
+    d = json.loads(body)
+    d["_generated_by"] = ("filmkit-doctor --install. Absolute paths, no environment variable: "
+                          "a hook command that fails to expand is a hook FAILURE, and a hook "
+                          "failure lets the call through.")
+    return d
+
+
+def check(film, facts_path, r):
+    import _project as P
+    version = P.kit_version()
+    r.add(OK if version != "unknown" else BAD, f"kit {version} at {KIT}")
+
+    py = sys.version_info
+    r.add(OK if py >= (3, 9) else BAD, f"python {py.major}.{py.minor}.{py.micro}")
+
+    gate = KIT / "hooks" / "gate.py"
+    r.add(OK if gate.exists() else BAD,
+          f"gate script {'present' if gate.exists() else 'MISSING'}")
+
+    if film is None:
+        r.add(WARN, "no film in this directory",
+              "Run from inside a film, or start one:  filmkit-init .")
+    else:
+        facts = json.loads(facts_path.read_text(encoding="utf-8"))
+        shown = facts.get("film_name") or film.name
+        pinned = facts.get("kit_version")
+        if pinned == version:
+            r.add(OK, f"film {shown} pins kit {pinned}")
+        elif pinned is None:
+            r.add(BAD, f"film {shown} pins NO kit_version",
+                  "A film that does not pin the kit it was checked by is not reproducible.")
+        else:
+            same_major = str(pinned).split(".")[0] == str(version).split(".")[0]
+            r.add(WARN if same_major else BAD,
+                  f"film pins kit {pinned}, running {version}",
+                  "Same major: the rules still mean what they meant." if same_major else
+                  "MAJOR mismatch: a rule changed meaning. Upgrade deliberately.")
+        if "look_pack" not in facts:
+            r.add(WARN, "look_pack is not declared",
+                  "Set it to a pack name or to null. Silence is not the same as none.")
+
+    for host, rel in (("Claude Code", ".claude/skills"), ("Codex", ".agents/skills")):
+        target = (film or pathlib.Path.cwd()) / rel
+        if target.exists():
+            n = len([x for x in target.iterdir() if (x / "SKILL.md").exists()])
+            r.add(OK if n else WARN, f"{host}: {n} skill(s) visible at {rel}")
+        else:
+            r.add(WARN, f"{host}: no {rel}",
+                  f"Skills live in the kit at skills/. Link them:\n"
+                  f"ln -s {KIT / 'skills'} {target}")
+
+    if film:
+        for host, path in (("Claude Code", film / ".claude" / "settings.json"),
+                           ("Codex", film / ".codex" / "hooks.json")):
+            if not path.exists():
+                r.add(BAD, f"{host}: no hook registration at {path.relative_to(film)}",
+                      "Nothing will stop a generation. Run:  filmkit-doctor --install")
+                continue
+            try:
+                txt = path.read_text(encoding="utf-8")
+                if "$" in txt:
+                    r.add(BAD, f"{host}: registration interpolates an environment variable",
+                          "A command that fails to expand is a hook FAILURE, and a hook\n"
+                          "failure LETS THE CALL THROUGH. Re-run --install.")
+                elif str(KIT / "hooks") not in txt:
+                    r.add(WARN, f"{host}: registration points at a different kit",
+                          f"This kit is at {KIT}. Re-run --install to repoint it.")
+                else:
+                    r.add(OK, f"{host}: hook registered, absolute path, no variable")
+            except Exception as e:
+                r.add(BAD, f"{host}: registration unreadable ({e})")
+
+    r.add(WARN, "hook TRUSTED — not detectable from here",
+          "Both hosts require you to approve a repo-committed hook before it runs.\n"
+          "Claude Code: the workspace trust prompt.   Codex: /hooks.\n"
+          "Until then the registration is present, correct and INERT — and an inert\n"
+          "spend gate is indistinguishable from a permissive one. Confirm it yourself.")
+
+    probe = json.dumps({"tool_name": "mcp__higgsfield__generate_video",
+                        "cwd": str(film or pathlib.Path.cwd()),
+                        "tool_input": {"prompt": "filmkit doctor probe — no receipt exists"}})
+    p = subprocess.run([sys.executable, str(gate)], input=probe,
+                       capture_output=True, text=True)
+    denied = '"permissionDecision": "deny"' in p.stdout
+    r.add(OK if (denied and p.returncode == 0) else BAD,
+          "gate denies an unreceipted generation" if denied else
+          "GATE DID NOT DENY an unreceipted generation",
+          "" if denied else f"exit {p.returncode}; output: {p.stdout[:120]!r}")
+
+
+def install(film, r):
+    if film is None:
+        print("\n  ! --install needs a film. Run it from inside one.\n")
+        return 1
+    print()
+    for path, nest in ((film / ".claude" / "settings.json", True),
+                       (film / ".codex" / "hooks.json", False)):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        reg = registration(KIT / "hooks")
+        if nest:
+            existing = {}
+            if path.exists():
+                try:
+                    existing = json.loads(path.read_text(encoding="utf-8"))
+                except Exception:
+                    existing = {}
+            existing["hooks"] = reg["hooks"]
+            existing["_filmkit"] = reg["_generated_by"]
+            path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
+        else:
+            path.write_text(json.dumps(reg, indent=2) + "\n", encoding="utf-8")
+        print(f"  wrote {path.relative_to(film)}")
+    print("\n  Now TRUST it — Claude Code's workspace prompt, or /hooks in Codex.")
+    print("  A registration nobody has approved is a gate that is not there.\n")
+    return 0
+
+
+def selftest():
+    import json as _json, tempfile
+    ok = True
+    print("\n  DOCTOR SELFTEST\n")
+    with tempfile.TemporaryDirectory() as d:
+        film = pathlib.Path(d)
+        (film / "film_facts.json").write_text(_json.dumps(
+            {"_fact_rev": 1, "kit_version": "0.0.0", "assets": {}}), encoding="utf-8")
+
+        r = Report(); check(film, film / "film_facts.json", r)
+        rows = {w: s for s, w, _ in r.rows}
+        cases = [
+            ("an unregistered film is a FAILURE",
+             any(s == BAD and "no hook registration" in w for s, w, _ in r.rows)),
+            ("a missing kit pin is reported",
+             any("pins kit 0.0.0" in w or "MAJOR mismatch" in w or "pins NO" in w
+                 for _s, w, _d in r.rows)),
+            ("undeclared look_pack is reported",
+             any("look_pack" in w for _s, w, _d in r.rows)),
+            ("trusted is reported SEPARATELY and never claimed",
+             any("not detectable from here" in w for _s, w, _d in r.rows)),
+            ("the gate is probed live, not assumed",
+             any("gate denies an unreceipted generation" in w for _s, w, _d in r.rows)),
+        ]
+        for name, good in cases:
+            ok &= good
+            print(f"  {'ok ' if good else '!! '}{name}")
+
+        install(film, r)
+        r2 = Report(); check(film, film / "film_facts.json", r2)
+        after = [(s, w) for s, w, _ in r2.rows if "hook registered" in w]
+        good = len(after) == 2 and all(s == OK for s, _ in after)
+        ok &= good
+        print(f"  {'ok ' if good else '!! '}--install satisfies both hosts")
+
+        for path in (film / ".claude" / "settings.json", film / ".codex" / "hooks.json"):
+            txt = path.read_text(encoding="utf-8")
+            g = "$" not in txt and "__GATE_PATH__" not in txt
+            ok &= g
+            print(f"  {'ok ' if g else '!! '}{path.name}: no variable, no placeholder")
+
+    print()
+    print("  \033[92mAll cases pass.\033[0m" if ok else "  \033[91mFAILED.\033[0m")
+    print("  NOT tested: whether either host reads these files, or whether you have")
+    print("  trusted the hook. Neither is knowable from in here, which is the whole")
+    print("  reason this command exists and also its limit.\n")
+    return 0 if ok else 1
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--install", action="store_true",
+                    help="write the hook registrations into this film")
+    ap.add_argument("--selftest", action="store_true")
+    a = ap.parse_args()
+    if a.selftest:
+        return selftest()
+
+    print("\n  FILMKIT DOCTOR\n")
+    film, facts_path = find_film()
+    r = Report()
+    check(film, facts_path, r)
+    if a.install:
+        return install(film, r)
+    r.show()
+    print()
+    if r.bad:
+        print(f"  \033[91m{r.bad} thing(s) would let a generation through unchecked.\033[0m\n")
+        return 1
+    print("  \033[92mNothing here would let a generation through unchecked —\033[0m")
+    print("  except the one thing this cannot see, which is whether you have trusted the hook.\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

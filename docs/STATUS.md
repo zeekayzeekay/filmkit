@@ -9,7 +9,7 @@
 | FK4 | engine.json, craft skills, look packs | **engine + skills done**, look packs pending |
 | FK5 | dual-run against TARN | **done** |
 | FK6 | promotion ritual, session state | **done** |
-| FK7 | init, doctor, private GitHub repo | pending |
+| FK7 | init, doctor, private GitHub repo | **init + doctor done**, repo pending |
 
 Kit version 0.1.0. Nothing in `../tarn` has been modified.
 
@@ -133,3 +133,18 @@ that overstates it.
 `filmkit-promote` gains a selftest: the four gates as a pure function, plus two
 end-to-end cases through the command, because FK-05 established a pure-core test cannot
 see the shell. Writing it found FK-10.
+
+## FK7
+
+`filmkit-doctor` is what makes the gate real: it generates both hosts' registrations with
+ABSOLUTE paths (no environment variable, therefore no guess), probes the gate live rather
+than assuming it works, and reports REGISTERED and TRUSTED as separate states — it can
+detect the first and says plainly that it cannot see the second.
+
+`filmkit-init` builds a film, links the skills into both hosts, installs the hooks, and
+then lists what is still missing. A scaffold that looks finished is a scaffold you fire a
+generation from.
+
+`tests/verify.py` now builds its clean film by RUNNING filmkit-init rather than copying
+the template directory — the first version tested a layout nobody creates that way and
+left the very first command anyone types completely unexercised.
