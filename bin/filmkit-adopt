@@ -60,11 +60,32 @@ def propose():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--apply", action="store_true", help="write the block into the facts file")
+    ap.add_argument("--set", action="append", default=[], metavar="ROLE=FILE[,FILE...]",
+                    help="declare a role the kit refuses to guess. Comma-separated for a "
+                         "role the film keeps in several files.")
     ap.add_argument("--pin", action="store_true",
                     help="also pin kit_version and declare look_pack null if unset")
     a = ap.parse_args()
 
+    chosen = {}
+    for spec in a.set:
+        role, _, val = spec.partition("=")
+        role, val = role.strip(), val.strip()
+        if role not in P.DEFAULT_FILES:
+            raise SystemExit(f"\n  ! {role!r} is not a document role. "
+                             f"Known: {', '.join(sorted(P.DEFAULT_FILES))}\n")
+        names = [x.strip() for x in val.split(",") if x.strip()]
+        missing = [n for n in names if not (P.DIR / n).exists()]
+        if missing:
+            # Declaring a file that is not there is the SAME fault as not
+            # declaring one that is: the tools read nothing and say so calmly.
+            raise SystemExit(f"\n  ! {role}: not in this film — {', '.join(missing)}\n")
+        chosen[role] = names if len(names) > 1 else names[0]
+
     resolved, ambiguous, absent = propose()
+    for role in chosen:
+        ambiguous.pop(role, None)
+        resolved.pop(role, None)
     print(f"\n  FILMKIT ADOPT — {P.PATH.name} in {P.DIR}\n")
 
     if not resolved and not ambiguous:
@@ -72,11 +93,16 @@ def main():
         print(f"  candidate in this film.{Z} Nothing to declare.\n")
     for role, name in resolved.items():
         print(f"  {G}->{Z} {role:12s} {P.DEFAULT_FILES[role]:20s} -> {name}")
+    for role, names in chosen.items():
+        shown = ", ".join(names) if isinstance(names, list) else names
+        print(f"  {G}->{Z} {role:12s} {P.DEFAULT_FILES[role]:20s} -> {shown}   (--set)")
     for role, found in ambiguous.items():
         print(f"  {R}??{Z} {role:12s} {P.DEFAULT_FILES[role]:20s} -> "
               f"{len(found)} candidates, none chosen")
         for f in found:
             print(f"                                          {f}")
+        print(f"       Choose with:  filmkit-adopt --set {role}={found[0]}")
+        print(f"       Or several:   filmkit-adopt --set {role}={','.join(found[:2])},...")
     if absent:
         print()
         for role, default in absent:
@@ -97,8 +123,10 @@ def main():
     facts = P.load()
     block = dict(facts.get("_files", {}))
     block.update(resolved)
+    block.update(chosen)
     facts["_files"] = block
-    written = [f"_files ({len(resolved)} role(s))"] if resolved else []
+    written = ([f"_files ({len(resolved) + len(chosen)} role(s))"]
+               if (resolved or chosen) else [])
     if a.pin:
         if not facts.get("kit_version"):
             facts["kit_version"] = P.kit_version()
