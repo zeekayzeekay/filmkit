@@ -985,3 +985,65 @@ repository first costs a second and removes the entire class.
 **What is not encoded:** nothing in the kit knows about the bridge, and nothing should. This
 is a rule about how I work, not about what the tools do, which is why both halves of FK-16
 are `manual` and both questions are aimed at me.
+
+---
+
+## FK-17 · THE ENCODING FIX FORCED A FOREIGN PROCESS TO WRITE WHAT ITS PARENT COULD NOT READ
+
+<!-- guard: automatic   scope: process
+     ask: which processes does your fix reach that you do not own, and does it change both halves of what they do? -->
+
+**What happened.** FK-14 hardened the kit's encoding two ways: each of our processes
+reconfigures its own streams to UTF-8, and — belt and braces — `PYTHONIOENCODING=utf-8` went
+into the environment so that children which import nothing of ours would inherit the
+instruction too.
+
+The acceptance gate found the second half on the operator's machine, one line out of 43
+invocations:
+
+```
+- origin  23 headings Â· 2 DRAFT Â· 4 INFO Â· 3 LIVE Â· 14 SUPERSEDED
++ kit     23 headings · 2 DRAFT · 4 INFO · 3 LIVE · 14 SUPERSEDED
+```
+
+The origin project's `preflight` runs its own `staleness` and prints the output. `staleness`
+inherited `PYTHONIOENCODING` and wrote UTF-8. `preflight` inherited nothing that changes how
+it **decodes**, so it read those bytes with the host locale and produced mojibake.
+
+**An environment variable changed one half of a conversation.** Writing was forced; reading
+was not, and could not be — the reader is frozen pre-extraction code that must not be
+edited, because reproducing it is the entire point of the gate. Before the fix the origin
+was internally consistent in cp1252 and correct about `·`. After it, it was talking to
+itself in two languages.
+
+**The justification I wrote for it was itself the error.** The comment on that line read: *"a
+kit that survives where the origin dies manufactures differences."* True, and it does not
+follow that imposing my encoding on the origin is the remedy — that manufactures a different
+difference, which is what happened. A foreign script that dies on a character its locale
+cannot encode is exhibiting its real behaviour. The gate should REPORT that the kit no
+longer does, as a divergence with a reason, not suppress it with a variable set behind both
+processes' backs.
+
+**Fix.** `_utf8` sets nothing in the environment. It reconfigures the streams of the process
+that imports it, and that is all. Ours write UTF-8 and decode UTF-8 (`kit_lint` enforces the
+second half at every capturing call). Anything that does not import it is left entirely
+alone and stays internally consistent with whatever its platform decided.
+
+**The rule: harden a process by IMPORT, never by ENVIRONMENT.** An import reaches exactly
+what you own. An environment variable reaches everything downstream, including code whose
+other half you cannot change.
+
+**And the test could not have caught it, which is its own finding.** The case asserting the
+old behaviour was *"a child that imports nothing of ours inherits it"* — the fault, asserted
+as a requirement. It is now replaced by its opposite: a foreign parent and child must
+round-trip **unchanged** through our tooling. The first version of that replacement still
+could not fail: it spawned the child with `PYTHONIOENCODING` popped from the environment, so
+the very variable under test was removed before the test ran. It passed with the fault
+deliberately reinstated. Reinstating the fault and watching the test go red is now part of
+writing one — not a habit, a step.
+
+**What is not encoded:** whether a foreign origin script would now die where the kit
+survives, on a real Windows machine, on text containing a character cp1252 lacks. It did not
+on this film. The gate would report it as a difference, correctly, and somebody would then
+have to declare it as a divergence — with the reason being that the kit was fixed and the
+origin was not.

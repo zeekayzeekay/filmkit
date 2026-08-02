@@ -49,6 +49,17 @@ HOSTILE = {**os.environ, "LC_ALL": "C", "LANG": "C",
            "PYTHONCOERCECLOCALE": "0", "PYTHONUTF8": "0"}
 HOSTILE.pop("PYTHONIOENCODING", None)
 
+# What a FOREIGN process would actually inherit from one of our tools: the
+# hostile locale, plus anything this kit has put into the environment by being
+# imported. If the kit imposes nothing, this is identical to HOSTILE.
+#
+# Building it by popping the variable — as case 3's first version did — makes
+# the case unable to fail. It passed with the fault deliberately reinstated,
+# which is the same defect it was written to catch, one level up.
+INHERITED = dict(HOSTILE)
+if "PYTHONIOENCODING" in os.environ:
+    INHERITED["PYTHONIOENCODING"] = os.environ["PYTHONIOENCODING"]
+
 
 def run(script, env):
     """Always through a PIPE. A terminal would hide the whole fault."""
@@ -92,28 +103,55 @@ def main():
         if not good:
             print(f"       exit {r.returncode}: {(r.stdout + r.stderr).strip().splitlines()[-1:]}")
 
-        # 3. A CHILD OF A TOOL. The instruction must be INHERITED, because the
-        #    scripts a tool spawns are not all ours -- dual_run runs the origin
-        #    project's own copies, which import nothing from this kit. If only
-        #    our processes were fixed, the acceptance gate would compare a
-        #    surviving kit against a dying origin and call it a difference.
-        child = d / "child.py"
-        child.write_text(f'print("{ARROW}")\n', encoding="utf-8")
-        parent = d / "parent.py"
-        parent.write_text(
-            "import sys, subprocess, pathlib\n"
-            f"sys.path.insert(0, {str(KIT / 'tools')!r})\n"
-            "import _project\n"
-            f"r = subprocess.run([sys.executable, {str(child)!r}], capture_output=True,\n"
-            '                   text=True, encoding="utf-8", errors="backslashreplace")\n'
-            'print("CHILD_RC", r.returncode)\n'
-            'print("CHILD_OUT", r.stdout.strip())\n', encoding="utf-8")
-        r = run(parent, HOSTILE)
-        good = "CHILD_RC 0" in r.stdout and ARROW in r.stdout
+        # 3. A FOREIGN CHILD IS LEFT ALONE — and this case replaces its opposite.
+        #
+        #    The first version asserted that a child importing nothing of ours
+        #    INHERITED the instruction, via PYTHONIOENCODING in the environment.
+        #    That shipped, and the acceptance gate caught it on the operator's
+        #    machine the next day:
+        #
+        #        - origin  23 headings Â· 2 DRAFT Â· 4 INFO ...
+        #        + kit     23 headings · 2 DRAFT · 4 INFO ...
+        #
+        #    The origin project's preflight runs its own staleness and prints the
+        #    result. staleness inherited the variable and wrote UTF-8; preflight
+        #    inherited nothing that changes how it DECODES, read those bytes with
+        #    the host locale, and produced mojibake. Forcing a child to write in
+        #    an encoding its parent does not read is a mismatch, not a fix.
+        #
+        #    So: harden by IMPORT, never by ENVIRONMENT. Here that is asserted in
+        #    the only way that means anything -- a parent and child that are both
+        #    foreign must round-trip UNCHANGED through our tooling.
+        foreign_child = d / "fchild.py"
+        foreign_child.write_text('print("\u00b7 marker")\n', encoding="utf-8")
+        foreign_parent = d / "fparent.py"
+        foreign_parent.write_text(
+            "import sys, subprocess\n"
+            f"r = subprocess.run([sys.executable, {str(foreign_child)!r}],\n"
+            "                   capture_output=True, text=True)\n"   # NO encoding=, on purpose
+            'sys.stdout.buffer.write(b"CHILD:" + r.stdout.encode("utf-8", "replace"))\n',
+            encoding="utf-8")
+        # A locale whose encoding is not UTF-8 is what makes this test mean
+        # something; under one, a foreign pair that agrees with ITSELF is the
+        # only correct outcome, whatever bytes they agree on.
+        r = run(foreign_parent, INHERITED)
+        blob = r.stdout + r.stderr
+        good = "\u00c2" not in blob and "UnicodeDecodeError" not in blob
         ok &= good
-        print(f"  {'ok ' if good else '!! '}a child that imports nothing of ours inherits it")
+        print(f"  {'ok ' if good else '!! '}a foreign parent and child are not interfered with")
         if not good:
-            print(f"       {(r.stdout + r.stderr).strip()[-300:]}")
+            print(f"       {blob.strip()[:160]}")
+            print("       Something in this kit is imposing an encoding on processes that "
+                  "are not ours —")
+            print(f"       inherited: "
+                  f"{ {k: v for k, v in INHERITED.items() if k.startswith('PYTHON')} }")
+
+        # ...and OUR tool still writes UTF-8 to that same hostile pipe, by import
+        # alone. Both halves, or neither is evidence.
+        r = run(tool, HOSTILE)
+        good = r.returncode == 0 and ARROW in r.stdout
+        ok &= good
+        print(f"  {'ok ' if good else '!! '}...while ours still writes {ARROW}, by import alone")
 
         # 4. THE REAL ENTRY POINTS, not stand-ins. Cases 1-3 test the mechanism
         #    with scripts this file wrote, which is how the first version passed

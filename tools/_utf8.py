@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-THE HOST'S LOCALE IS NOT A PLACE TO KEEP A DEPENDENCY.
+THIS PROCESS WRITES UTF-8, WHATEVER IT IS ATTACHED TO.
 
-Import this first, for the side effect. Every executable in this kit does.
+Import first, for the side effect. Every executable in this kit does.
 
     import _utf8   # noqa: F401
 
@@ -20,34 +20,36 @@ why it looked fine. `lint_prompt.py` prints an arrow cp1252 cannot represent, so
 the child raised UnicodeEncodeError partway through its report and died, and the
 parent read a truncated run as a short one.
 
-WHY IT IS ITS OWN MODULE
-------------------------
-It was six lines inside `_project`, and `_project` is imported by every TOOL --
-which `kit_lint` enforces. It is not imported by the HARNESSES: `verify.py`,
-`dual_run.py`, `kit_lint.py`, and the encoding test itself. So the fix protected
-everything except the things that run the tests, and on the operator's machine
-the encoding test crashed of the exact fault it was written to prove was fixed:
+WHAT IT DELIBERATELY DOES NOT DO — AND THIS IS THE IMPORTANT PART
+-----------------------------------------------------------------
+It does NOT set `PYTHONIOENCODING` in the environment. An earlier version did,
+so that children would inherit the instruction even if they imported nothing of
+ours. That was wrong, and the acceptance gate caught it on the operator's
+machine within a day:
 
-    UnicodeEncodeError: 'charmap' codec can't encode character '\\u2192'
-      ... in encoding_test.py, printing the line that says the fix works
+    - origin  23 headings Â· 2 DRAFT Â· 4 INFO Â· 3 LIVE Â· 14 SUPERSEDED
+    + kit     23 headings · 2 DRAFT · 4 INFO · 3 LIVE · 14 SUPERSEDED
 
-A fix that lives in one module protects the importers of that module. A fix that
-must hold everywhere needs somewhere everything imports, and a check that
-everything does.
+The origin project's `preflight` runs its own `staleness` and prints the output.
+`staleness` inherited PYTHONIOENCODING and wrote UTF-8. `preflight` did not
+inherit anything that changes how it DECODES, so it read those bytes with the
+host locale and produced mojibake. **Forcing a child to write in an encoding its
+parent does not read is not a fix, it is a mismatch** -- and the parent here is
+frozen pre-extraction code that must not be edited, because reproducing it is
+the whole point of the gate.
 
-TWO HALVES, AND BOTH ARE NEEDED
--------------------------------
-1. THIS process writes UTF-8 whatever it is attached to.
-2. Every CHILD it spawns is told to do the same -- including children that import
-   nothing of ours. `dual_run` runs the origin project's own scripts, and a kit
-   that survives where the origin dies manufactures differences and calls them
-   extraction bugs.
+So the rule is: HARDEN A PROCESS BY IMPORT, NEVER BY ENVIRONMENT. A process that
+imports this module writes UTF-8 and, being ours, also decodes UTF-8 at every
+capturing call -- `kit_lint` enforces that half. A process that does not import
+it is left entirely alone, and stays internally consistent with whatever its
+platform decided.
 
-`setdefault`, so an operator who has deliberately chosen an encoding keeps it.
+The cost, stated: a foreign script that dies on a character its locale cannot
+encode still dies. That is its real behaviour, the kit's differs, and the
+acceptance gate should REPORT that difference rather than hide it under an
+environment variable set behind both their backs.
 """
-import os, sys
-
-os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+import sys
 
 for _s in (sys.stdin, sys.stdout, sys.stderr):
     try:
