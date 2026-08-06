@@ -217,10 +217,47 @@ def rim_chroma(arr, box, proof_name=None):
     # here, because I have no corpus to set one from and inventing a number is
     # how the old end gate came to demand R-B>45 from a light measuring +1.7.
     # This is a number for a person to read next to a picture.
-    res = dict(area=100*float(lit.mean()), rb=float((R-B)[lit].mean()),
+    # FK-33. THE MEAN WAS SUMMARISING TWO POPULATIONS.
+    #
+    # Measured off the operator's own proof overlay, 6 Aug, inside a box drawn
+    # round the man: the counted pixels are not one rim with one colour. They
+    # are a WARM rim on his hair, from the room's own light above and behind
+    # him, and a COOL edge along his shoulders, from the window. Two lights, two
+    # parts of one man. A single mean R-B falls between them and describes
+    # NEITHER -- and it made the film's own LIGHT block and POSITIVE LOCKS read
+    # as a contradiction when both were true of different parts of the frame.
+    #
+    # So the two populations are reported separately, always, with their shares.
+    # No threshold decides when to say so, because a threshold is the thing I
+    # keep inventing and having to retract (FK-29, FK-30). The numbers are
+    # printed; the reader sees whether it is bimodal.
+    rb_px = (R - B)
+    warm = lit & (rb_px >= 0)
+    cool = lit & (rb_px < 0)
+    n = float(lit.sum())
+    # WHERE each population sits, as a fraction of the box's width. This is a
+    # SPATIAL PROXY and is labelled as one: in the origin film's end frame the
+    # cool pixels are the door stiles and glazing bars at both edges of the box
+    # while the man is in the middle. It is not a subject test -- FK-30 is the
+    # finding about a positional number whose helper line claimed more than it
+    # measured, and this one says what it is.
+    bw = lit.shape[1]
+    def _cx(m):
+        return float(np.where(m)[1].mean()) / max(bw - 1, 1) if m.any() else float("nan")
+    def _edge(m):
+        if not m.any():
+            return float("nan")
+        c = np.where(m)[1]
+        return 100.0 * float(((c < bw / 3) | (c > 2 * bw / 3)).mean())
+    res = dict(area=100*float(lit.mean()), rb=float(rb_px[lit].mean()),
                lum=float(L[lit].mean()),
                span_x=100*float((lit.any(axis=0)).mean()),
-               span_y=100*float((lit.any(axis=1)).mean()))
+               span_y=100*float((lit.any(axis=1)).mean()),
+               warm_pct=100*float(warm.sum())/n, cool_pct=100*float(cool.sum())/n,
+               rb_warm=float(rb_px[warm].mean()) if warm.any() else float("nan"),
+               rb_cool=float(rb_px[cool].mean()) if cool.any() else float("nan"),
+               warm_cx=_cx(warm), cool_cx=_cx(cool),
+               warm_edge=_edge(warm), cool_edge=_edge(cool))
     if proof_name:
         PROOFS.mkdir(exist_ok=True)
         over = (arr * 0.30).astype(np.uint8)
@@ -374,6 +411,17 @@ def selftest():
             for i in range(3):
                 arr[6:101, 60 + i * 10:64 + i * 10] = rim
             Image.fromarray(arr).save(p / name)
+        # FK-33. A frame carrying BOTH populations, which is the whole case the
+        # split exists for -- warm stripes and cool stripes in one box, so the
+        # mean lands between them and describes neither. Without this the split
+        # would be tested only on frames where one share is 100% and the other
+        # is 0, which is the arrangement that cannot tell a split from a mean.
+        arr = np.full((200, 200, 3), 18, dtype=np.uint8)
+        for i in range(3):
+            arr[6:101, 60 + i * 10:64 + i * 10] = (215, 165, 110)
+        for i in range(3):
+            arr[6:101, 100 + i * 10:104 + i * 10] = (110, 160, 220)
+        Image.fromarray(arr).save(p / "mixed.png")
 
         def run(args):
             r = subprocess.run([sys.executable, str(pathlib.Path(__file__).resolve())] + args,
@@ -449,6 +497,28 @@ def selftest():
             ("...and the same frames with no --subject still reach one",
              [str(p / "a.png"), str(p / "b.png"), "--pair"],
              lambda o, rc: "UNCALIBRATED" not in o and rc in (0, 1)),
+            # FK-33. The mean was summarising two populations. On the origin
+            # film that is a warm rim on his hair and a cool edge on his
+            # shoulders -- two lights, two parts of one man -- and averaging
+            # them made the film's LIGHT block and POSITIVE LOCKS read as a
+            # contradiction when both were true.
+            ("a frame with two populations reports BOTH, not just their mean",
+             [str(p / "mixed.png"), str(p / "b.png"), "--pair"],
+             lambda o, rc: "THE SPLIT" in o and "warm-leaning" in o and "cool-leaning" in o),
+            # The one that matters: a 75/25 frame must READ 75/25. Without it
+            # the split is only ever exercised on frames where one share is 100
+            # and the other 0 -- the arrangement in which a split and a mean are
+            # indistinguishable.
+            ("...and a 75/25 frame reads 75/25, with both means kept apart",
+             [str(p / "mixed.png"), str(p / "b.png"), "--pair"],
+             lambda o, rc: "75% at R-B +105.0" in o and "25% at R-B -110.0" in o),
+            # The control: on a frame that genuinely has ONE population, saying
+            # so is the informative answer, and an empty population must print
+            # as a dash rather than nan -- a nan in a report reads as a broken
+            # tool rather than as an absence.
+            ("a single-population frame says 100/0, and the empty side is a dash not nan",
+             [str(p / "a.png"), str(p / "b.png"), "--pair"],
+             lambda o, rc: "100% at R-B +105.0" in o and "0% at R-B      —" in o),
             ("...and that proof is a DIFFERENT file from the golden-rim one",
              [str(p / "a.png"), str(p / "b.png"), "--pair"],
              lambda o, rc: (p / "proofs" / "a_rimmask.png").exists()
@@ -590,6 +660,36 @@ def main():
             return 1
         print(f"        rim colour IN BOX    start R-B {sc['rb']:+6.1f}  →  end "
               f"{ec['rb']:+6.1f}    swing {ec['rb']-sc['rb']:+6.1f}   (need <= {-RIM_SWING_MIN:+.1f})")
+        # FK-33. THE SPLIT, ALWAYS -- because the line above is a mean over two
+        # populations and on this film it falls between them and describes
+        # neither. Read this block before the line above it.
+        # An empty population is a real answer -- "no cool pixels at all" is the
+        # most informative thing this block can say -- so it prints as a dash
+        # rather than nan. A nan in a report reads as a broken tool.
+        def _n(v, w=6, d=1, suf=""):
+            return f"{'—':>{w}}" if v != v else f"{v:+{w}.{d}f}{suf}"
+
+        def _p(v, w=9):
+            return f"{'—':>{w}}" if v != v else f"{v:{w}.0f}"
+
+        print(f"\n        THE SPLIT — the line above is the mean of these two:")
+        print(f"                              {'start':>22s}   {'end':>22s}")
+        print(f"          warm-leaning   {_p(sc['warm_pct'])}% at R-B {_n(sc['rb_warm'])}"
+              f"   {_p(ec['warm_pct'])}% at R-B {_n(ec['rb_warm'])}")
+        print(f"          cool-leaning   {_p(sc['cool_pct'])}% at R-B {_n(sc['rb_cool'])}"
+              f"   {_p(ec['cool_pct'])}% at R-B {_n(ec['rb_cool'])}")
+        print(f"          warm sits at x {_n(sc['warm_cx'], 8, 2)}    {_n(ec['warm_cx'], 20, 2)}"
+              f"   (0 = left of box, 1 = right)")
+        print(f"          cool sits at x {_n(sc['cool_cx'], 8, 2)}    {_n(ec['cool_cx'], 20, 2)}")
+        print(f"          in outer 1/3   warm {_p(sc['warm_edge'], 3)}% cool "
+              f"{_p(sc['cool_edge'], 3)}%      warm {_p(ec['warm_edge'], 3)}% cool "
+              f"{_p(ec['cool_edge'], 3)}%")
+        print(f"          (a SPATIAL PROXY, not a subject test: in a box round a person the")
+        print(f"           architecture tends to the edges and the person to the middle, but")
+        print(f"           where YOUR subject sits is a thing to see in the proof, not infer)")
+        print(f"\n        Two lights on two parts of one subject are not a contradiction and")
+        print(f"        their mean is not a description. If both shares are large, the number")
+        print(f"        on the line above is between them and belongs to neither.")
         print(f"        rim brightness       {sc['lum']:6.1f}  →  {ec['lum']:6.1f}"
               f"    (must rise: he walks into the brighter end of the room)")
         print(f"        rim area             {sc['area']:6.2f}%  →  {ec['area']:6.2f}%")

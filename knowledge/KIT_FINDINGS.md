@@ -2051,3 +2051,78 @@ name nothing.
 operator's description of blue on the glazing and orange on the man — and FK-30 rested on the
 threshold's provenance. Neither ever depended on the spread number. That is luck rather than
 design, and it is worth saying which.
+
+---
+
+## FK-33 · THE MEAN WAS SUMMARISING TWO LIGHTS, AND IT MANUFACTURED A CONTRADICTION IN THE FILM
+
+**Cost:** none directly. It had already produced a wrong film conclusion from me and a wrong
+entry in the operator's own open-items list, and it was one step from writing a shot's
+lighting design.
+
+**How it was found.** I asked the operator whether the blue in the proof was *"outside his
+silhouette or inside his outline"*. He said, reasonably, that he did not know what that
+meant, and sent the frame. **The question was unanswerable as put** — a dark man in front of a
+lit wall produces a lit-pixel-beside-a-dark-neighbourhood either way, so "inside or outside"
+is not something an eye resolves at that scale.
+
+So I measured his proof overlay instead of asking him to squint at it. Counting the painted
+pixels and splitting them by column across the subject box:
+
+| position in the box | orange | blue |
+|---|---|---|
+| left edge — door stile, glazing bar | 60 | **2 881** |
+| **the middle — the man** | **3 268** | 1 746 |
+| right edge — door stile, glazing bars | 540 | **6 508** |
+
+**~78% of the cool pixels are at the two edges of the box, away from his body.** Where he
+actually stands, warm outnumbers cool nearly two to one, and vertically the warm is
+concentrated in the band holding his head — a hair rim, which is what it looks like.
+
+**The finding is the second thing in those numbers, not the first.** There is real cool on
+him: the columns at his shoulder contours. So the frame carries **two lights on two parts of
+one man** — warm from the room above and behind on his crown, cool from the window across his
+shoulders. `rim_chroma` averaged them into one scalar. **A mean over a bimodal distribution
+falls between the modes and describes neither.**
+
+**And that mean manufactured a contradiction in the film.** `OPEN_ITEMS` G1 lists, as a defect
+to fix, that the block's LIGHT paragraph says the new light *"arrives cooler"* while its
+POSITIVE LOCKS say *"the first warm light of the film lands on him at 6.0s and stays on him to
+the end."* **Both are true of this frame.** They describe different parts of him. The
+contradiction is an artefact of collapsing two populations into one number and then reading
+the number as a property of the man.
+
+I had already written two paragraphs off that scalar — one retracted at FK-29, one at FK-30.
+
+**Fix.** The two populations are reported separately, **always**: share and mean R−B for each,
+their horizontal centroids, and the share of each falling in the outer thirds of the box.
+Printed above the mean, with the line *"the line above is the mean of these two"*, and closing
+with *"two lights on two parts of one subject are not a contradiction and their mean is not a
+description."*
+
+**No threshold decides when to say so** — the split is unconditional. A conditional would need
+a number for "how bimodal is bimodal", and inventing that number is precisely what FK-29 and
+FK-30 are both about. The shares are printed; the reader sees it.
+
+The outer-thirds figure is labelled **a spatial proxy and not a subject test**, in those words,
+because FK-30 is the finding about a positional number whose helper line claimed more than it
+measured — and I wrote that one two commits ago.
+
+**An empty population prints as a dash, not `nan`.** *"No cool pixels at all"* is the most
+informative thing this block can say, and a `nan` in a report reads as a broken tool rather
+than as an absence.
+
+**The test that keeps it honest** is the 75/25 fixture, not the 100/0 one. A frame carrying
+both populations must READ 75/25 with the two means held apart. On frames where one share is
+100 and the other 0, a split and a mean are indistinguishable — which is the arrangement every
+synthetic test I had written until now happened to use.
+
+**The transferable rule.** *A summary statistic asserts that its population is one thing.*
+Mean, median, ratio — each is a claim of unimodality made silently by the choice to compute
+it, and nothing about the resulting number reveals the claim. **Where a measurement can
+straddle two physical causes, report the causes.** The mean was never wrong as arithmetic; it
+was wrong as a description, and it had no way to say so.
+
+**What is still not encoded, and is a person's:** which of the two populations is on the
+subject. The centroids and the outer-thirds share are a proxy — the proof image answers it,
+and answering it is what produced this finding.
