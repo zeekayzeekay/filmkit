@@ -2514,3 +2514,71 @@ level"* and *"table height"* — *"Found on G7/G10, both false positives."* Now 
 excluded after *field of*, *angle of* and *point of*. **A subject word inside a fixed compound
 that means something else is not that subject**, and this is the second time that sentence has
 had to be written into this table.
+
+---
+
+## FK-40 · THE LAST GATE BEFORE 54 CREDITS WENT GREEN ON A RECORD SAYING "UNANSWERED"
+
+**Cost:** none, and only because the operator pasted the output and the refusal line above it
+did not match what the gate below it claimed.
+
+**What happened.** `checklist.py --outstanding` reported:
+
+> *32 manual item(s) · **32 answered · 0 OUTSTANDING***
+
+and `preflight` reported `manual PASS`, on a run record whose M29 reads:
+
+```
+## M29 · F-58
+**before listing what is present, does the ONE load-bearing relationship hold?**
+
+> unanswered
+>
+> THE ONE RELATIONSHIP, named so the check is a single question: ...
+> HOW TO CHECK IT: open G3/k5-30.png and G3/k6-v16-output.png and test ...
+```
+
+The file's own first line is: **"Answer every item. `unanswered` fails the run."** It did not.
+
+### Two faults, and the first one is mine
+
+**1 · I put guidance inside the answer block.** I wrote that section deliberately unanswered,
+because answering it meant opening two pictures I had never opened — and then filled the same
+`>` block with instructions for whoever would answer it. **Any predicate that separates
+answered from unanswered by "is there a quoted line that is not `unanswered`" reads three
+lines of advice as the answer.** I built the thing that defeated the gate, in the act of being
+careful about the gate.
+
+**2 · There were TWO definitions of "answered", and they disagreed.** `preflight` parsed the
+section and required a non-`unanswered` quoted line. `checklist.outstanding` tested
+`f["id"] not in txt` — **does the finding id appear anywhere in the file.** Any mention
+counted: a heading, a cross-reference, a sentence in a different item's answer.
+
+So the two tools measured different things, and **the weaker one is the one an operator runs
+to ask "what is left"**. That is the FK-13/FK-25 shape a third time: the tool you reach for
+when you want the state gives you something else, in a form indistinguishable from the answer.
+
+### The fix, and why it is stricter than "at least one real line"
+
+The rule is now the one the record's own first line already stated: **the word `unanswered`
+anywhere in an answer block means unanswered, whatever else the block contains.**
+
+The weaker rule was defeated the first time it met a real record. No parser can tell an answer
+from advice — but it can believe the word the writer put there on purpose. **Fail closed:** a
+legitimate answer that happens to contain the word is cleared by rewording one line; a green
+gate on an unanswered item is 54 credits.
+
+And there is now **one** definition. `preflight` imports `checklist.has_answer` instead of
+restating it. Two implementations of one predicate is the fault; deleting one is the fix.
+
+Five paired cases, including the one that failed before: a real answer, `unanswered` alone,
+`unanswered` **plus guidance**, a section with no quoted line, and no section at all.
+
+**The transferable rule.** *When two components enforce the same rule, they are not two
+guards; they are one guard and a liability.* The pair only looks redundant until they drift,
+and nothing announces the drift — both keep passing, on different questions, and the answer
+you get depends on which one you happened to run. **One predicate, one place, imported.**
+
+**What is still not encoded, and cannot be:** whether an answer is any good. Both tools say so
+in their own output — *"That is not the same as a good answer"* — and F-58's whole existence is
+proof that the difference is where the money goes.

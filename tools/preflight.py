@@ -302,13 +302,15 @@ def check_record(path):
               "\n    (python3 checklist.py --manual gives the current numbering) and re-run.")
         return False
 
+    # FK-40. ONE DEFINITION OF "ANSWERED", AND IT LIVES IN checklist.py.
+    # This logic used to be duplicated here. The copy in `checklist.outstanding`
+    # drifted to a much weaker test -- "does the finding id appear anywhere in
+    # the file" -- so the two tools disagreed, and the weaker one is the one an
+    # operator runs to ask what is left. Import it; do not restate it.
+    from checklist import has_answer
     answered, unanswered = [], []
     for m, fid in items:
-        blk = re.search(rf"^## {m} · {re.escape(fid)}\b.*?(?=\n## |\Z)", text, re.S | re.M)
-        body = blk.group(0) if blk else ""
-        ans = re.findall(r"^> ?(.*)$", body, re.M)
-        ans = [x.strip() for x in ans if x.strip() and x.strip().lower() != "unanswered"]
-        (answered if ans else unanswered).append((m, fid))
+        (answered if has_answer(text, fid) else unanswered).append((m, fid))
     for m, fid in answered:
         print(f"  ok  {m} ({fid})")
     for m, fid in unanswered:

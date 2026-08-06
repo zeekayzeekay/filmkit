@@ -138,6 +138,60 @@ def run_record(fs):
     return "\n".join(L) + "\n"
 
 
+# FK-40. THE ONE DEFINITION OF "ANSWERED", IMPORTED BY PREFLIGHT.
+#
+# There were two, and they disagreed. `preflight` parsed the section, dropped
+# any line reading `unanswered`, and required something else to remain -- which
+# is right. `outstanding()` tested `f["id"] not in txt`: does the finding id
+# appear ANYWHERE in the file. So an item whose written answer was the single
+# word `unanswered` counted as answered, and the tool an operator runs to ask
+# "what is left" was the weaker of the two.
+#
+# Measured on the origin film, 6 Aug: `32 answered · 0 OUTSTANDING` on a record
+# containing the literal line `> unanswered`, four lines under a heading whose
+# own file begins "Answer every item. `unanswered` fails the run."
+#
+# Two implementations of one predicate is the fault. This is the predicate.
+def has_answer(text, fid):
+    """Is there a REAL answer against this finding id in the run record?
+
+    Sections are keyed by finding id, never by item number -- F-49: M-numbers
+    are positions, so inserting one finding renumbers every later item and a
+    number-keyed matcher slides each answer onto the next question.
+
+    THE RULE IS THE ONE THE RECORD'S OWN FIRST LINE STATES: "Answer every item.
+    `unanswered` fails the run." So the word `unanswered` ANYWHERE in the answer
+    block means unanswered, whatever else the block contains.
+
+    The weaker rule -- "at least one quoted line that is not `unanswered`" --
+    was defeated the first time it met a real record. An M29 section written on
+    6 Aug read:
+
+        > unanswered
+        >
+        > THE ONE RELATIONSHIP: ...
+        > HOW TO CHECK IT: open two pictures and test ...
+
+    Four quoted lines, three of them guidance for whoever answers it, and the
+    predicate counted them as the answer. No parser can tell an answer from
+    advice; what it CAN do is believe the word the writer put there on purpose.
+
+    Fail closed. A legitimate answer that happens to contain the word is cleared
+    by rewording one line; a green gate on an unanswered item is 54 credits.
+
+    Nothing here judges whether an answer is GOOD; only a person does that, and
+    both callers say so in their own output.
+    """
+    blk = re.search(rf"^## M\d+ · {re.escape(fid)}\b.*?(?=\n## |\Z)",
+                    text, re.S | re.M)
+    if not blk:
+        return False
+    lines = [x.strip() for x in re.findall(r"^> ?(.*)$", blk.group(0), re.M)]
+    if any(x.lower() == "unanswered" for x in lines):
+        return False
+    return any(lines)
+
+
 def outstanding(fs):
     """Which manual items have NO written answer in the run record.
 
@@ -159,7 +213,7 @@ def outstanding(fs):
         print("  which is correct for a film where nobody has run the review yet.\n")
         return 1
     txt = rec.read_text(encoding="utf-8")
-    todo = [f for f in manual if f["id"] not in txt]
+    todo = [f for f in manual if not has_answer(txt, f["id"])]
     print(f"\n  {len(manual)} manual item(s) · {len(manual) - len(todo)} answered · "
           f"{len(todo)} OUTSTANDING\n")
     for f in todo:
