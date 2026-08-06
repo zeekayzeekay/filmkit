@@ -154,6 +154,15 @@ HEAD_BOX = (0.20, 0.02, 0.55, 0.50)   # generous; catches a person, does not seg
 
 RIM_SWING_MIN = 15.0     # k5-30 -> k6-5 is -23.5. Two start frames differ by 4.1.
 
+# FK-30. WHICH BOX THAT NUMBER WAS DERIVED ON, because it is not a property of
+# the light -- it is a property of the light AND the region it was read from.
+# Every reading behind RIM_SWING_MIN was taken on HEAD_BOX, and FK-29 showed
+# what HEAD_BOX contains at the window end: a shopfront. So a swing measured
+# inside a subject box CANNOT be compared with it. Doing so compares two
+# different quantities and calls the difference a verdict, which is the exact
+# fault this project keeps paying for.
+RIM_SWING_DERIVED_ON = "the default head box"
+
 # FK-27. The direction is NOT the caller's to choose, and `--expect` used to
 # accept it as though it were — then read it nowhere. The operator ran the
 # documented command with `--expect warmer`, this gate measured a swing of
@@ -428,7 +437,18 @@ def selftest():
              lambda o, rc: "Give one per image" in o and rc == 2),
             ("...and one box for all images is allowed",
              [str(p / "a.png"), str(p / "b.png"), "--pair", "--subject", "0.25,0.02,0.45,0.55"],
-             lambda o, rc: rc in (0, 1) and "Give one per image" not in o),
+             lambda o, rc: rc == 3 and "Give one per image" not in o),
+            # FK-30. A subject-box run must REFUSE a verdict, because the
+            # threshold it would be judged against was derived on a different
+            # region. The control below is the one that matters: the SAME
+            # frames with no --subject must still reach a real verdict, or this
+            # rule is just "refuse whenever anything is specified".
+            ("a subject-box run refuses a verdict and says why",
+             [str(p / "a.png"), str(p / "b.png"), "--pair", "--subject", "0.25,0.02,0.45,0.55"],
+             lambda o, rc: "UNCALIBRATED — no verdict" in o and rc == 3),
+            ("...and the same frames with no --subject still reach one",
+             [str(p / "a.png"), str(p / "b.png"), "--pair"],
+             lambda o, rc: "UNCALIBRATED" not in o and rc in (0, 1)),
             ("...and that proof is a DIFFERENT file from the golden-rim one",
              [str(p / "a.png"), str(p / "b.png"), "--pair"],
              lambda o, rc: (p / "proofs" / "a_rimmask.png").exists()
@@ -579,8 +599,17 @@ def main():
         # edge, and the mean of it was being printed as "rim colour on him".
         print(f"        mask spread          {sc['span_x']:5.0f}% x {sc['span_y']:3.0f}%  →  "
               f"{ec['span_x']:5.0f}% x {ec['span_y']:3.0f}%  of the box's columns x rows")
-        print(f"                             (context, NOT a gate: a rim on a person is "
-              f"compact; near 100% is architecture)")
+        # FK-30. THE LINE THAT USED TO BE HERE SAID "near 100% is
+        # architecture". It was wrong, and its own first real run showed it: a
+        # box drawn TIGHT around a man reads ~100% too, because his head fills
+        # the top and his shoulders fill the width. Spread measures how well the
+        # box FITS its contents, not what the contents are. A number whose name
+        # asserts more than it measures is the whole of FK-29, reproduced by me
+        # one commit later while writing the fix for it.
+        print(f"                             (context, NOT a gate, and NOT a "
+              f"subject test: a tight box\n                              around a person reads "
+              f"near 100% as well. High spread in a LOOSE\n                              box "
+              f"means architecture; in a tight one it means nothing.)")
         print(f"        room R-B             {s['rb_neutral']:+6.1f}  →  {e['rb_neutral']:+6.1f}"
               "    (the room swings cool too)")
         print(f"        golden-rim head-box  {s['rim_headbox_pct']:6.2f}%  →  "
@@ -609,6 +638,29 @@ def main():
                   f"about him:\n          --subject X0,Y0,X1,Y1  (one per image, in order, "
                   f"fractions of the frame)")
         swing = ec["rb"] - sc["rb"]
+        # FK-30. A THRESHOLD IS NOT A PROPERTY OF THE LIGHT. It is a property of
+        # the light AND the region it was read from. Every reading behind
+        # RIM_SWING_MIN was taken on the default head box, and FK-29 established
+        # what that box holds at the window end of this room: a shopfront. So a
+        # swing measured inside a SUBJECT box cannot be judged against it.
+        #
+        # Doing it anyway would have handed over a FAIL that is exactly as
+        # unfounded as the PASS that started all of this -- same tool, same
+        # frames, opposite verdict, neither of them evidence. Refuse the verdict
+        # and say what would restore it.
+        if _sgiven or _egiven:
+            print(f"\n  \033[93mUNCALIBRATED — no verdict\033[0m")
+            print(f"    You measured inside a subject box. The swing threshold "
+                  f"({-RIM_SWING_MIN:+.1f}) was\n    derived on {RIM_SWING_DERIVED_ON}, which is "
+                  f"a different region, so comparing the\n    two would compare two different "
+                  f"quantities and print the difference as a\n    verdict. The measurement above "
+                  f"is real. The threshold does not apply to it.")
+            print(f"\n    Observed: swing {swing:+.1f}, rim brightness "
+                  f"{sc['lum']:.0f} → {ec['lum']:.0f}.")
+            print(f"    To get a verdict back, re-derive the threshold from subject-box readings")
+            print(f"    across the candidate frames, then set RIM_SWING_MIN and "
+                  f"RIM_SWING_DERIVED_ON\n    together — they are one fact and they move as one.\n")
+            return 3
         if swing > -RIM_SWING_MIN:
             fail.append(f"rim colour swing {swing:+.1f} is weaker than {-RIM_SWING_MIN:+.1f}. "
                         "Two start frames differ by 4.1, so this is not noise — the light on "

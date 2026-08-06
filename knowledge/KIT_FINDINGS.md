@@ -1824,3 +1824,76 @@ the region or make the report say it did not.**
 
 **What is not encoded, and cannot be from here:** whether any given `--subject` box actually
 contains the man. That is a look at the proof, which is now the right proof.
+
+---
+
+## FK-30 · THE FAIL WAS AS UNFOUNDED AS THE PASS, AND MY OWN NEW NUMBER DID NOT DISCRIMINATE
+
+**Cost:** none. Caught on the first real run of the fix written one commit earlier.
+
+**What happened.** FK-29 added `--subject` so the measured box could follow a subject who
+walks away from the lens. The operator ran it on the real pair with boxes drawn round the man:
+
+```
+                        default box        subject box
+  start R-B               +3.5               +5.6
+  end   R-B              -20.8               -6.6
+  swing                  -24.3              -12.2
+  verdict                 PASS               FAIL   (need <= -15.0)
+```
+
+Restricting to the subject moved **both** readings warmer, which is consistent with the
+window being the cool contributor — the FK-29 diagnosis survives. What does not survive is
+either verdict.
+
+### 1 · The threshold and the measurement came from different boxes
+
+`RIM_SWING_MIN = 15.0` was derived from *"k5-30 → k6-5 is −23.5"*, and **every reading behind
+it was taken on the default head box** — the box FK-29 established contains a shopfront at
+the window end. A swing measured inside a subject box cannot be judged against it. Comparing
+them compares two different quantities and prints the difference as a verdict.
+
+**So the FAIL was exactly as unfounded as the PASS.** Same tool, same two frames, opposite
+verdicts, neither of them evidence — and the FAIL is the more dangerous of the two, because
+it agreed with what I had just predicted.
+
+**Fix.** `RIM_SWING_DERIVED_ON` sits beside `RIM_SWING_MIN` and names the region the number
+came from. A `--subject` run now prints **UNCALIBRATED — no verdict**, reports the observed
+swing as a measurement, exits 3, and says what would restore a verdict: re-derive the
+threshold from subject-box readings across the candidate frames, and move both constants
+together, *because they are one fact.*
+
+The control that keeps this honest is the second selftest case, not the first: the same
+frames with **no** `--subject` must still reach a real verdict. Otherwise the rule is merely
+"refuse whenever anything is specified", which looks strict and tests nothing.
+
+### 2 · The spread number I invented one commit ago does not measure what its line claimed
+
+FK-29 added mask spread with the line *"a rim on a person is compact; near 100% is
+architecture."* The first real run:
+
+```
+  mask spread   100% x 95%  →   94% x 98%
+```
+
+Those are the boxes I drew **around the man**. A box fitted tightly to a person reads ~100%
+too — his head fills the top, his shoulders fill the width. **Spread measures how well the
+box fits its contents, not what the contents are.** High spread means architecture in a
+*loose* box and nothing at all in a tight one.
+
+So: a number whose name and helper line asserted more than it measured — which is the whole
+of FK-29 — written by me, in the commit that fixed FK-29. The line now says what it can and
+cannot tell you.
+
+**The transferable rule, and it is the sharper form of FK-29's.** *A threshold carries the
+provenance of its measurement, and changing the region invalidates it as surely as changing
+the instrument.* A constant in a file looks like a fact about the world. Most of them are
+facts about the world **as measured one particular way**, and the two are indistinguishable
+once the number is written down without its conditions.
+
+**What is still open on this film, and it is not a kit question.** Whether the residual −6.6
+is light on him or the bright window immediately past his silhouette. He stands **in front
+of** the glazing, so no rectangle can separate them — a mask keyed on "lit pixel beside a
+dark neighbourhood" will read the window showing past his shoulder as a rim on his shoulder.
+That is a limit of the instrument, not a setting, and the next thing to look at is whether
+the blue traces the OUTSIDE of his silhouette or the inside of his outline.
