@@ -3,24 +3,14 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "mcp__higgsfield__.*",
+        "matcher": ".*",
+        "_why": "EVERY tool, and the gate classifies inside. Three names were tried and three were wrong: mcp__higgsfield__.* missed the CLI, adding Bash missed PowerShell, and the next surface will call its shell something else. A matcher can only cover the names somebody listed, and nothing signals the ones they did not.",
         "hooks": [
           {
             "type": "command",
             "command": "\"__PYTHON__\" \"__GATE_PATH__/gate.py\"",
             "timeout": 30,
-            "statusMessage": "filmkit: checking preflight receipt"
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"__PYTHON__\" \"__GATE_PATH__/gate.py\"",
-            "timeout": 30,
-            "statusMessage": "filmkit: checking the command line"
+            "statusMessage": "filmkit: checking the call"
           }
         ]
       }

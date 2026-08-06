@@ -1211,3 +1211,54 @@ CLI road partially, and the direct-API road not at all.
 `zeentraland@gmail.com`, which is not the address on the session. The assistant flagged it
 unasked. Nothing in this kit checks whose credits are at stake, and nothing here should
 without being told to.
+
+---
+
+## FK-21 · THREE SELECTIONS BY NAME, THREE MISSES — THE MATCHER IS NOW `.*`
+
+<!-- guard: automatic   scope: delivery
+     ask: is anything in the enforcement path still SELECTING by a name somebody had to know in advance? -->
+
+**What happened, in order.**
+
+| the matcher was | what it missed |
+|---|---|
+| `mcp__higgsfield__.*` | the `higgsfield` CLI. FK-20 |
+| `mcp__higgsfield__.*` + `Bash` | `PowerShell` — the operator's Windows host exposes **two** shell tools, and the assistant used the one nobody had listed |
+
+Each fix was correct about the thing it had just seen and wrong about the class. And the
+second one is the sharper lesson, because FK-20 had already stated the rule — *guard the
+resource, not the name of the door* — and I then keyed the fix to the name of the **tool**.
+The rule was written down and applied one level too shallow, in the same file, the same day.
+
+**How it was found.** Only by refusal. Four probes returned an allow and every one was
+ambiguous — a permitted call and an absent gate are indistinguishable. What settled it was
+running the operator's own `gate.py` under his own interpreter against his own command: it
+denied. The script was right, so the host had never asked it.
+
+**Fix.** The matcher is `.*`. Every tool call reaches the gate, and `decide()` classifies
+inside — exactly the argument made for taking the whole MCP server instead of a list of
+spending tools, applied at the layer above. A payload carrying a `command` string is
+inspected whatever the tool is called; anything else falls through to the MCP check and then
+to allow.
+
+**The cost, chosen deliberately by the operator:** a Python process on every tool call in the
+film's folder — reads, edits, searches, everything. Tens of milliseconds each. `gate.py`
+keeps its heavy imports lazy so it is interpreter startup rather than work, but it is a real
+tax paid all day, and it buys the thing an enumeration cannot: nothing slips through by being
+called a name nobody listed.
+
+**A test that encoded the old shape had to go.** `filmkit-doctor --selftest` asserted the
+matcher **ignored** `mcp__Gmail__search_threads` and `Bash`. Those cases passed every run and
+were an assertion that the gate was blind by design. They now assert the opposite — the
+matcher reaches everything, including `some_future_shell` — and the discrimination is tested
+in `gate.py --selftest`, both directions, for arbitrary tool names.
+
+**The transferable rule.** *Selection by name belongs outside the enforcement path.* Use a
+name to route, never to decide. Any place where a guard must be told in advance what
+something is called is a place that fails silently the first time somebody calls it something
+else — and it fails as an ALLOW, which produces no evidence at all.
+
+**What is not encoded:** the direct-API road. A script using the SDK, or `curl`, carries no
+`command` field and no Higgsfield tool name, and nothing here will see it. That is still the
+boundary of what a per-project hook can do.

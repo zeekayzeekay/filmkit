@@ -268,10 +268,12 @@ def check(film, facts_path, r):
             except Exception:
                 asked = []
         if any("higgsfield" in x for x in asked):
-            r.add(OK, "permissions.ask covers the generation server and the CLI",
+            r.add(OK, "permissions.ask covers the server, and the CLI as far as it can",
                   "Enforced by the host, needs no trust step. It cannot read a receipt, so\n"
-                  "it cannot replace the hook — it is what still holds if the hook does not\n"
-                  "run in some surface.")
+                  "it cannot replace the hook. The command-prefix form is documented for\n"
+                  "Bash; whether a host applies it to another shell tool is neither\n"
+                  "documented nor detectable from here, so those entries may be inert.\n"
+                  "The hook is what actually covers a shell by any name — matcher .*")
         else:
             r.add(BAD, "no permissions.ask rule for the generation server",
                   "The hook is the only thing standing between a prompt and a spend, and it\n"
@@ -347,7 +349,13 @@ def install(film, r):
             # only ever guards what has already gone wrong once. The cost is a
             # prompt on a balance check. That is the correct price.
             perms = existing.get("permissions") or {}
-            want = ["mcp__higgsfield__*", "Bash(higgsfield:*)"]
+            # The prefix form is documented for Bash. Whether a host applies it
+            # to another shell tool is not documented and not detectable from
+            # here, so the extra entries may be inert -- which is why they are
+            # the BELT and the hook is the braces. Doctor says so rather than
+            # letting the green line imply cover it cannot confirm.
+            want = ["mcp__higgsfield__*", "Bash(higgsfield:*)",
+                    "PowerShell(higgsfield:*)"]
             ask = [x for x in (perms.get("ask") or []) if x not in want] + want
             perms["ask"] = ask
             existing["permissions"] = perms
@@ -448,19 +456,27 @@ def selftest():
             ok &= g
             print(f"  {'ok ' if g else '!! '}{path.name}: no variable, no placeholder, "
                   f"no PATH lookup")
-        # the matcher must actually MATCH. A gate with a regex that misses is
-        # inert, and every other check in here would still report green.
+        # THE MATCHER MUST MATCH EVERYTHING, and that is the design now.
+        #
+        # These two cases used to assert the opposite -- that the matcher IGNORED
+        # another server's tools and `Bash`. That was the old shape, and it was
+        # wrong three times running: the matcher missed the CLI, then missed
+        # PowerShell on the operator's own Windows host, which exposes both shells
+        # and used the one nobody had listed.
+        #
+        # Selection by name is now gone. The matcher takes every call and
+        # `gate.decide` classifies inside, where the discrimination is tested with
+        # both directions for arbitrary tool names.
         reg = _json.loads((film / ".codex" / "hooks.json").read_text(encoding="utf-8"))
         mrx = _re.compile(reg["hooks"]["PreToolUse"][0]["matcher"])
-        for tool, want in (("mcp__higgsfield__generate_video", True),
-                           ("mcp__higgsfield__generate_3d", True),
-                           ("mcp__higgsfield__apps_invoke", True),
-                           ("mcp__Gmail__search_threads", False),
-                           ("Bash", False)):
+        for tool in ("mcp__higgsfield__generate_video", "mcp__higgsfield__generate_3d",
+                     "mcp__higgsfield__apps_invoke", "mcp__Gmail__search_threads",
+                     "Bash", "PowerShell", "some_future_shell", "Read"):
             got = bool(mrx.search(tool))
-            ok &= got == want
-            print(f"  {'ok ' if got == want else '!! '}matcher {'catches' if want else 'ignores'}"
-                  f" {tool}")
+            ok &= got
+            print(f"  {'ok ' if got else '!! '}matcher reaches {tool}")
+        print("       discrimination lives in gate.decide, not in the matcher — see")
+        print("       hooks/gate.py --selftest, which runs both directions per tool name.")
 
     print()
     print("  \033[92mAll cases pass.\033[0m" if ok else "  \033[91mFAILED.\033[0m")

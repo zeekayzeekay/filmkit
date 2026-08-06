@@ -154,8 +154,20 @@ def decide(payload, *, now_utc=None, film_dir=None):
     """Pure function: payload in, (decision, reason) out. Testable without a host."""
     tool_full = payload.get("tool_name") or ""
 
-    if tool_full == "Bash":
-        cmd = (payload.get("tool_input") or {}).get("command")
+    # ANY SHELL, NOT A LIST OF SHELLS.
+    #
+    # The matcher is now `.*` and this function decides. Three name-based
+    # selections were tried and all three were wrong: `mcp__higgsfield__.*`
+    # missed the CLI (FK-20), adding `Bash` missed `PowerShell` -- the operator's
+    # Windows host exposes both and used the one nobody had listed -- and the next
+    # surface will call its shell something else again.
+    #
+    # So: if a payload carries something that looks like a command line, inspect
+    # it, whatever the tool is called. A tool with no command field falls through
+    # to the MCP check below and then to allow, which is the fast path and the
+    # common one.
+    cmd = (payload.get("tool_input") or {}).get("command")
+    if isinstance(cmd, str):
         reaches, free = reaches_service(cmd)
         # THE CANARY COVERS THIS ROAD TOO, and for a reason worth stating: an
         # ALLOW carries no information. A free CLI call that succeeds looks
@@ -398,6 +410,18 @@ def selftest():
     def sh(c):
         return {"tool_name": "Bash", "tool_input": {"command": c}}
     case("ordinary shell is none of our business", sh("ls -la"), "allow")
+
+    # THE TOOL NAME IS NOT THE POINT. Three selections by name were wrong in a
+    # row; this asserts the gate no longer cares what the shell is called.
+    def named(tool, c):
+        return {"tool_name": tool, "tool_input": {"command": c}}
+    for _t in ("Bash", "PowerShell", "Terminal", "some_future_shell"):
+        case(f"{_t}: a CLI generation is refused whatever the tool is called",
+             named(_t, "higgsfield generate video --prompt x"), "deny")
+        case(f"{_t}: an ordinary command is not our business",
+             named(_t, "dir"), "allow")
+    case("a tool with no command field is not a shell",
+         {"tool_name": "Read", "tool_input": {"file_path": "x.md"}}, "allow")
     case("running the kit's own tests is not a spend", sh("python tests/verify.py"), "allow")
     case("a word merely containing the name is not the binary", sh("echo higgsfielder"), "allow")
     case("the CLI's read-only status call is free", sh("higgsfield account status"), "allow")
