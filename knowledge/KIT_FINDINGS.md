@@ -2454,3 +2454,63 @@ reads the same. **Report every instance, or say in the output that you are not.*
 FILE and failed on a line in the block's own change table — prose *explaining* that the door's
 four differ from the bays' eight, in commentary `lint_prompt` never reads. **A check wider
 than the thing it checks reports faults that are not in it.** Scoped to the fenced body.
+
+---
+
+## FK-39 · I SEARCHED ONE SECTION OF THE LEDGER AND DELETED A FACT THE OTHER SECTION HELD
+
+**Cost:** none, and only because a warning sent me back into the film's geometry for a
+different reason entirely.
+
+**What happened.** Writing G3 v5 I removed *"a brass strip along its top edge"* from the stall
+riser, and said so in the deliverable, in the runbook, and in the block's own change table:
+
+> *No verified claim puts a brass strip there. I searched every verified claim for stall
+> riser, strip, reveal, kickplate and threshold — seven claims, and none puts one on the
+> riser.*
+
+Every word of that is true. I searched `assets[*].verified[*].claim`. **The film records the
+brass strip in `geometry.cafe.objects.frontage`:**
+
+> *green panelled stall riser below with a brass strip along its top.*
+
+A different section of the same file, which my search never touched. **I removed a real
+feature of the room from a 54-credit prompt, and published the reasoning three times.**
+
+**This is FK-37b's shape, one day later.** There I asserted "the only tool that takes a
+positional FILE" from an AST scan blind to hand-rolled argv parsing. Here I asserted "no
+verified claim" from a search of one key in a document with several. **Both times the search
+ran, returned nothing, and the nothing was reported as a finding about the world rather than
+a finding about the search.**
+
+And both times the honest form was available and one clause long: *"no VERIFIED CLAIM has it —
+I did not search the geometry section."*
+
+**The transferable rule, and it is the third statement of it this week.** *Say what you
+searched, in the sentence that reports what you did not find.* A negative result is a claim
+about coverage, and coverage is the part nobody writes down. "I found nothing" and "nothing is
+there" differ by exactly the thing most likely to be wrong.
+
+**Related, and left for the operator rather than fixed unilaterally.** The same geometry
+section says:
+
+> *counter_authority: THE SELECTED K5 FRAME, **currently G3/k5-24.png***
+
+`k5-24` was withdrawn on 31 Jul; `selections.start` has been `k5-30` since fact-rev 16. That
+is **FK-26's fault in a second place** — a superseded frame presenting itself as current — and
+`staleness.py` cannot see it, because FK-26's check reads prompt blocks and this is a facts
+key. A general guard is possible (scan every string in the facts for a filename that is not
+the current selection for its role) but it would fire on legitimate history, so the design is
+the operator's call and not mine to make.
+
+### The smaller one in the same run: "field of view" is not the view
+
+`lint_prompt`'s subject table matched `\bview\b`, so `OPTICS: 29° field of view, locked` was
+grouped with *"only now does the view beyond the glass change"* and reported as opposing
+statements about one subject. An optics term collided with a scene noun.
+
+The same file already carries this fix once, for `horizon`, which had to stop matching *"water
+level"* and *"table height"* — *"Found on G7/G10, both false positives."* Now `view` is
+excluded after *field of*, *angle of* and *point of*. **A subject word inside a fixed compound
+that means something else is not that subject**, and this is the second time that sentence has
+had to be written into this table.

@@ -98,7 +98,15 @@ SUBJECTS = _cfg('subjects', None) or {
     "position":   r"\b(?:feet|stands?|standing|spot|mark|position|walks?)\b",
     "mouth":      r"\bmouth|jaw|lips\b",
     "eyes":       r"\beyes?|pupils?|gaze|squint",
-    "the view":   r"\b(?:glass|glazing|window|view|panes?|frontage|outside)\b",
+    # FK-39. "view" alone matched FIELD OF VIEW -- an optics term, not the thing
+    # beyond the glass -- so the OPTICS line "29 degree field of view, locked"
+    # was grouped with "the view beyond the glass changes" and reported as
+    # opposing statements about one subject. The same shape as the `horizon`
+    # fix two lines down, which had to stop matching "water level". A subject
+    # word inside a fixed compound that means something else is not that
+    # subject.
+    "the view":   r"\b(?:glass|glazing|window|panes?|frontage|outside)\b"
+                  r"|(?<!field of )(?<!angle of )(?<!point of )\bview\b",
     "framing":    r"\b(?:framing|frame left|frame centre|fills?|filling|wider|widen)\b",
     "camera":     r"\bcamera|lens|tilt|arc|dolly|pull(?:s|ing)? back|static|locked off|pivot|widen\b",
     "the cut":    r"\bcut\b",
