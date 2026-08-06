@@ -2250,6 +2250,12 @@ single frame in which the correlation held, and both were labelled with the corr
 than the computation. **The safe caption for a derived number is what it is computed from, not
 what it usually means.**
 
+**Third instance, found immediately after.** The `mask spread` caption — the one FK-30 had
+already corrected once — still ended *"high spread in a LOOSE box means architecture"*. Also a
+statement of what the number usually means rather than what it is computed from, and also
+false: a loose box round a person spreads too. Both captions now state the computation and
+nothing else.
+
 **And the standing conclusion this forces:** there is no positional statistic in this tool that
 identifies the subject. There will not be one. The proof image answers it, a person reads the
 proof, and every number here is a summary that person is reading *alongside* the picture — not

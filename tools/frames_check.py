@@ -756,10 +756,15 @@ def main():
         # box FITS its contents, not what the contents are. A number whose name
         # asserts more than it measures is the whole of FK-29, reproduced by me
         # one commit later while writing the fix for it.
-        print(f"                             (context, NOT a gate, and NOT a "
-              f"subject test: a tight box\n                              around a person reads "
-              f"near 100% as well. High spread in a LOOSE\n                              box "
-              f"means architecture; in a tight one it means nothing.)")
+        # FK-35, third instance. This caption was corrected once already (FK-30)
+        # and still ended "high spread in a LOOSE box means architecture" --
+        # another statement of what the number USUALLY MEANS rather than what it
+        # is computed from. A loose box round a person also spreads. Say the
+        # computation; the proof says the meaning.
+        print(f"                             (DISTRIBUTION ONLY, not a gate and not a subject"
+              f"\n                              test. It is the share of the box's columns and "
+              f"rows holding\n                              at least one counted pixel, and "
+              f"nothing more.)")
         print(f"        room R-B             {s['rb_neutral']:+6.1f}  →  {e['rb_neutral']:+6.1f}"
               "    (the room swings cool too)")
         print(f"        golden-rim head-box  {s['rim_headbox_pct']:6.2f}%  →  "
