@@ -1146,6 +1146,12 @@ generation and being refused.
 of the claim.* Write down where it applies at the same moment you write down what it does,
 because the reader will assume "everywhere" and the tool will not correct them.
 
+**Confirmed again, 6 Aug, from the other direction.** Refused by the canary on the MCP road,
+an assistant listed the ways to get the number anyway — and its third suggestion was *"start
+a session from a directory outside `C:\ai-video\tarn` (the gate keys off the film found from
+cwd)."* It named the boundary exactly, and then declined to cross it. The scope is not a
+subtle property: it is the first thing a capable reader notices when refused.
+
 **What is not encoded, and this is the important part:** nothing detects the ungated case
 from inside it. A session that does not read the registration also cannot be told by the
 registration that it is not reading it. In such a surface the only control is the standing
