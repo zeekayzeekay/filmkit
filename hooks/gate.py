@@ -109,23 +109,41 @@ def decide(payload, *, now_utc=None, film_dir=None):
     # ---- THE CANARY -------------------------------------------------------
     # /hooks proves a hook is LOADED. It does not prove the host CONSULTS it
     # before spending, and those are different facts -- an inert registration
-    # looks exactly like a working one from the inside, which is the whole
-    # reason this kit exists.
+    # looks exactly like a working one from the inside, which is the entire
+    # premise of this kit. Proving the second normally means attempting a real
+    # generation, and if the answer is no the proof costs credits.
     #
-    # Proving the second normally means attempting a real generation, and if the
-    # answer is no the proof costs credits. So: while `.filmkit/CANARY` exists,
-    # the gate refuses one FREE, ZERO-COST call. Ask the host for a balance
-    # check; being refused is proof the host asked this file first, and being
-    # answered is proof it did not.
+    # So: while the marker exists, the gate refuses one FREE, ZERO-COST call.
+    # Ask the host for a balance check. Refused means the host asked this file
+    # first. Answered means it did not.
     #
-    # It is a file, not a flag, so it survives the session and cannot be left on
-    # by accident without `filmkit-doctor` reporting it.
-    if film_dir and tool in ("balance", "show_plans_and_credits"):
-        if (pathlib.Path(film_dir) / ".filmkit" / "CANARY").exists():
-            return "deny", (
-                "filmkit CANARY — this refusal IS the test, and it just passed. The host "
-                "consulted the gate before running a Higgsfield tool, which is the one thing "
-                "/hooks cannot tell you. Turn it off:  filmkit-doctor --canary off")
+    # THE MARKER LIVES BESIDE THE GATE, NOT IN THE FILM, and that placement is
+    # the whole design. A film-side marker cannot be found unless the film can
+    # be found, and the film is found from the cwd the HOST reports -- so in a
+    # surface that reports a different cwd, the probe would come back "answered"
+    # and be read as "the hook is not consulted", when the truth was "consulted,
+    # and could not locate the film". Two different failures, one indication.
+    # A marker next to gate.py is reachable from __file__ and answers exactly one
+    # question.
+    #
+    # The refusal then REPORTS the cwd and the film lookup, because a surface
+    # where the hook runs but cannot find the film is a surface where every
+    # generation is denied for the wrong reason -- and that is worth knowing
+    # before it happens rather than after.
+    if (KIT / ".filmkit-canary").exists() and tool in ("balance", "show_plans_and_credits"):
+        cwd = payload.get("cwd")
+        seen, _f = find_film(cwd) if cwd else (None, None)
+        return "deny", (
+            "filmkit CANARY — this refusal IS the test, and it just passed. The host "
+            "consulted the gate before running a Higgsfield tool, which is the one thing "
+            "/hooks cannot tell you.\n"
+            f"  cwd reported by the host : {cwd!r}\n"
+            f"  film found from there    : {str(seen) if seen else 'NONE — and that matters'}\n"
+            + ("" if seen else
+               "  A surface where the gate runs but cannot see the film denies every\n"
+               "  generation for the wrong reason: it has no receipts to check against.\n"
+               "  Report this cwd — the fix is a resolution rule, not a bigger hammer.\n")
+            + "  Turn it off:  filmkit-doctor --canary off")
 
     if tool in FREE:
         return "allow", ""
@@ -293,21 +311,32 @@ def selftest():
     # working canary from one that refuses everything -- and a canary that
     # refuses a real generation-adjacent call by accident would be worse than
     # none, because it would look like the gate working.
-    with tempfile.TemporaryDirectory() as _c:
-        _film = pathlib.Path(_c)
-        case("canary off: the balance is still free",
-             call("balance"), "allow", film_dir=str(_film))
-        (_film / ".filmkit").mkdir()
-        (_film / ".filmkit" / "CANARY").write_text("armed", encoding="utf-8")
+    # THE CANARY, both directions. A test that only checks it fires cannot tell a
+    # working canary from one that refuses everything -- and a canary that
+    # refused a real call by accident would be worse than none, because it would
+    # look exactly like the gate working.
+    _marker = KIT / ".filmkit-canary"
+    _was = _marker.exists()
+    try:
+        if _was:
+            _marker.unlink()
+        case("canary off: the balance is still free", call("balance"), "allow")
+        _marker.write_text("armed\n", encoding="utf-8")
         case("canary armed: the balance is refused, and that IS the proof",
-             call("balance"), "deny", film_dir=str(_film))
+             call("balance"), "deny")
         case("canary armed: plans and credits too",
-             call("show_plans_and_credits"), "deny", film_dir=str(_film))
+             call("show_plans_and_credits"), "deny")
         case("canary armed: another server is still none of our business",
-             {"tool_name": "mcp__Gmail__search_threads", "tool_input": {}}, "allow",
-             film_dir=str(_film))
+             {"tool_name": "mcp__Gmail__search_threads", "tool_input": {}}, "allow")
         case("canary armed: uploading a reference is still free",
-             call("media_upload", path="x.png"), "allow", film_dir=str(_film))
+             call("media_upload", path="x.png"), "allow")
+        case("canary armed: a generation is still denied for its OWN reason",
+             call("generate_video", prompt="a man"), "deny")
+    finally:
+        if _marker.exists() and not _was:
+            _marker.unlink()
+        elif _was and not _marker.exists():
+            _marker.write_text("armed\n", encoding="utf-8")
 
     with tempfile.TemporaryDirectory() as d:
         # A REAL film, however small. The first version wrote receipts using the

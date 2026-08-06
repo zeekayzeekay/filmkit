@@ -278,7 +278,7 @@ def check(film, facts_path, r):
                   "needs to be trusted, loaded AND consulted. Add the second mechanism:\n"
                   "  filmkit-doctor --install")
 
-    if film and (film / ".filmkit" / "CANARY").exists():
+    if (KIT / ".filmkit-canary").exists():
         r.add(WARN, "CANARY ARMED — one free call is being refused on purpose",
               "Ask your host for a Higgsfield balance check. Being REFUSED is the proof\n"
               "that the host consults this gate before running a Higgsfield tool, which\n"
@@ -477,15 +477,13 @@ def main():
     print("\n  FILMKIT DOCTOR\n")
     film, facts_path = find_film()
     if a.canary:
-        if film is None:
-            print("  ! --canary needs a film. Run it from inside one.\n")
-            return 1
-        marker = film / ".filmkit" / "CANARY"
+        marker = KIT / ".filmkit-canary"
         if a.canary == "on":
             marker.parent.mkdir(parents=True, exist_ok=True)
             marker.write_text("armed\n", encoding="utf-8")
             print("  CANARY ARMED.\n")
-            print("  Now ask your host — Claude Code, Codex — for a Higgsfield BALANCE check.")
+            print("  Now ask your host — Claude Code CLI, the desktop app, Cowork — for")
+            print("  a Higgsfield BALANCE check.")
             print("  It costs nothing either way, and the two outcomes mean opposite things:\n")
             print("    REFUSED   the host consulted this gate before running a Higgsfield")
             print("              tool. That is the thing /hooks cannot tell you, and it is")
