@@ -706,9 +706,22 @@ def main():
         print(f"          in outer 1/3   warm {_p(sc['warm_edge'], 3)}% cool "
               f"{_p(sc['cool_edge'], 3)}%      warm {_p(ec['warm_edge'], 3)}% cool "
               f"{_p(ec['cool_edge'], 3)}%")
-        print(f"          (a SPATIAL PROXY, not a subject test: in a box round a person the")
-        print(f"           architecture tends to the edges and the person to the middle, but")
-        print(f"           where YOUR subject sits is a thing to see in the proof, not infer)")
+        # FK-35. THE SENTENCE THAT USED TO BE HERE WAS WRONG, and it was wrong
+        # one commit after FK-30, which is the finding about a positional number
+        # whose helper line claimed more than it measured. It said "the
+        # architecture tends to the edges and the person to the middle".
+        #
+        # A RIM RIDES THE SILHOUETTE, AND IN A TIGHT BOX THE SILHOUETTE IS THE
+        # EDGE. So a perfect subject box, containing nothing but a person,
+        # reports most of its counted pixels in the outer thirds -- for the same
+        # reason a box full of glazing does. The number cannot separate them and
+        # no arrangement of it can. Reported because the distribution is worth
+        # seeing; explained as what it is, which is not a subject test and not a
+        # proxy for one either.
+        print(f"          (DISTRIBUTION ONLY. This cannot tell a rim at the box edge from")
+        print(f"           architecture at the box edge, because a rim rides the silhouette")
+        print(f"           and in a tight box the silhouette IS the edge. Only the proof")
+        print(f"           answers which — that is what the proof is for.)")
         print(f"\n        Two lights on two parts of one subject are not a contradiction and")
         print(f"        their mean is not a description. If both shares are large, the number")
         print(f"        on the line above is between them and belongs to neither.")

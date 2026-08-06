@@ -2201,3 +2201,56 @@ loop — so a new member cannot join without it.
 film, as opposed to merely starting. `verify.py` checks the exit code and that no traceback
 appears; a selftest that quietly skipped all its cases outside a film would pass. Each of
 these prints its case list, and a person reads it.
+
+---
+
+## FK-35 · THE SECOND POSITIONAL PROXY WAS WRONG THE SAME WAY THE FIRST ONE WAS
+
+**Cost:** none. Caught on its first real run, by reading its own output against the picture it
+was supposed to summarise.
+
+**What happened.** FK-33 added an *"in outer 1/3"* figure — the share of each population
+falling in the outer thirds of the box — with the helper line:
+
+> *(a SPATIAL PROXY, not a subject test: in a box round a person the architecture tends to the
+> edges and the person to the middle…)*
+
+The first run inside a **subject box**, drawn tightly around the man:
+
+```
+  in outer 1/3   warm  62% cool  84%      warm  38% cool  89%
+```
+
+Read literally through that helper line, a box containing almost nothing but a person says
+it is 84–89% architecture.
+
+**The line is wrong, and it is wrong structurally rather than by degree.** *A rim rides the
+silhouette, and in a tight box the silhouette IS the edge.* A perfect subject box — nothing in
+it but a man — reports most of its counted pixels in the outer thirds, **for the same reason a
+box full of glazing does.** The statistic cannot separate them, and no arrangement of it can.
+
+**This is FK-30 again, one commit later, written by me while fixing FK-30.** FK-30 is the
+finding about `mask spread`, whose helper line said *"near 100% is architecture"* and whose
+first real run read 94–100% on boxes drawn round the man. I corrected that line, then in the
+next commit invented a second positional number and gave it the same kind of interpretive
+claim. **Twice, on the same page, in the same week — the number was fine and the sentence
+underneath it was the fault, both times.**
+
+**Fix.** The number stays, because the distribution is worth seeing. The interpretation goes,
+and is replaced by what the figure actually cannot do:
+
+> *(DISTRIBUTION ONLY. This cannot tell a rim at the box edge from architecture at the box
+> edge, because a rim rides the silhouette and in a tight box the silhouette IS the edge. Only
+> the proof answers which — that is what the proof is for.)*
+
+**The transferable rule, and it is the sharpest form of a thing this ledger keeps
+rediscovering.** *A statistic is not a proxy for a physical fact merely because it correlates
+with one in the case you had in mind.* Both of these numbers were invented while looking at a
+single frame in which the correlation held, and both were labelled with the correlation rather
+than the computation. **The safe caption for a derived number is what it is computed from, not
+what it usually means.**
+
+**And the standing conclusion this forces:** there is no positional statistic in this tool that
+identifies the subject. There will not be one. The proof image answers it, a person reads the
+proof, and every number here is a summary that person is reading *alongside* the picture — not
+instead of it.
