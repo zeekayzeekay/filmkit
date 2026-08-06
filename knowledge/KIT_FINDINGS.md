@@ -1736,3 +1736,91 @@ operator are sufficient to produce a confident wrong conclusion.**
 **What is still not encoded, and it needs a human:** whether the lit pixels are ON A PERSON.
 No threshold in this file can tell hair from a mullion. The proof can, in one look, which is
 why the tool now insists on the right one.
+
+---
+
+## FK-29 · THE GATE WAS MEASURING A WINDOW AND REPORTING IT AS THE LIGHT ON A MAN
+
+**Cost:** none in credits, and only because FK-28's new proof made it visible in one look.
+**It had already produced a wrong conclusion, in writing, from me, twice.**
+
+**What the picture shows.** With the gated mask finally drawn, the operator described the end
+frame in one sentence: *"The blue is mostly on the glazing, and on the ridges of the mountain
+visible through the glazing. The edges of his head … is golden."*
+
+Read that against what the tool printed:
+
+```
+rim colour on him   start R-B  +3.5  →  end  -20.8   swing -24.3   (need <= -15.0)
+PASS
+```
+
+**The −20.8 is the window.** The pixels actually on the man are **orange — warm-leaning.**
+The gate reported a cool rim on him while the only rim on him was warm, and the swing that
+passed is manufactured almost entirely by the end frame's box containing a lake and a
+mountain range that the start frame's box does not.
+
+**Mask spread, measured after the fact:** the counted pixels occupy essentially every column
+of that crop. A rim on a person is compact. A glazing grid runs edge to edge.
+
+**Why the box cannot work here.** `HEAD_BOX` is a fixed fraction of the frame. It was
+measured for a man standing at a counter and filling it. In the end frame he is twelve feet
+from the lens, back to camera, dark suit, and occupies roughly a tenth of the same box. The
+other nine tenths are a shopfront. **The box is fixed and the subject is not**, and nothing
+in the tool ever re-checked that its region still contained the thing the number was named
+after.
+
+**The trajectory, which is the finding.** Three corrections, each right:
+
+| version | mask | what went wrong |
+|---|---|---|
+| 1 | warm and bright | a skin detector — caught face and hands |
+| 2 | rim-on-dark, golden | unsatisfiable at the window end (F-28) |
+| 3 | rim-on-dark, colour-agnostic | catches the whole shopfront |
+
+**Every fix widened what the mask would accept, and not one of them re-asked whether it was
+still looking at a person.** That is F-63's shape — correct diagnoses, outcome unmoved —
+inside a measuring instrument rather than a prompt.
+
+**Fix, and note what it deliberately is not.** `--subject X0,Y0,X1,Y1`, one per image, so the
+region can follow a subject who moves. The measured box is drawn in the proof, so getting it
+right costs one free re-run. `rim_chroma` also reports **mask spread** — the share of the
+box's columns and rows containing a counted pixel — printed next to the number and
+**explicitly not gated.**
+
+*No threshold was invented.* I have one pair of frames and no corpus, and a number set from
+one unrepresentative frame is exactly how the old end gate came to demand R−B > 45 from a
+light measuring +1.7. Spread is a number for a person to read beside a picture, and it says
+so on the line.
+
+**What changed instead of a threshold: the verdict now names its scope.** With no
+`--subject`, the run prints `SCOPE: the DEFAULT head box … the numbers above are about a
+REGION and not about a person`, and the PASS line reads *"PASS over the DEFAULT head box — a
+region, not a person."* The label changed too: `rim colour on him` → `rim colour IN BOX`. The
+tool cannot find him. It can stop claiming it did.
+
+**How far the damage runs, stated rather than assumed.** The `--role end` gate uses the same
+box and the same mask — `rim_rb_max = -10.0`, with `k6-3 −15.4, k6-4 −15.1, k6-5 −20.0`
+recorded as passing. **Those readings are all suspect for the same reason**, and they were in
+play when four end-frame candidates were compared. The selection itself does not fall over:
+the record says v16 was chosen **on the cup**, which is a different measurement, and the rim
+gate is described there as *"over-satisfied"* on the frame that lost. So the outcome stands
+and its stated reasoning stands; what does not stand is the rim number quoted alongside.
+
+**Two things I got wrong on the way here, and the second is the one to keep.**
+
+*First*, I read `+3.5 → −20.8` and wrote a paragraph concluding the shot carries tungsten out
+of the room and loses it — good film reasoning, resting entirely on a number I had not seen
+the pixels of. **Second**, when the operator's first description came back mentioning brass
+and a guard rail, I checked they were outside the box and treated the question as answered.
+It was answered — *for the wrong mask*. I had already been told the golden-rim metric was
+context-only, in output I quoted back at him in the same message.
+
+**The transferable rule.** *A number named after a thing is a claim that the thing was
+measured, and the name is not the evidence.* `rim_headbox_pct`, `rim colour on him` — both
+read as though a person had been located. Neither tool call ever located one. **Where a
+measurement depends on a region containing a particular subject, either let the caller name
+the region or make the report say it did not.**
+
+**What is not encoded, and cannot be from here:** whether any given `--subject` box actually
+contains the man. That is a look at the proof, which is now the right proof.

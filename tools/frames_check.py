@@ -200,8 +200,18 @@ def rim_chroma(arr, box, proof_name=None):
     lit = (L > nb + 8) & (nb < 95) & (L > 60)
     if lit.sum() < 200:
         return None
+    # FK-29. HOW FAR THE COUNTED PIXELS ARE SPREAD, reported and NOT gated.
+    # A rim on a person is a compact thing in one part of the box. A glazing
+    # grid runs edge to edge. On this film's end frame the counted mask spanned
+    # essentially every column of the crop, which is a window and not a man --
+    # and the tool called its mean "rim colour on him". No threshold is set
+    # here, because I have no corpus to set one from and inventing a number is
+    # how the old end gate came to demand R-B>45 from a light measuring +1.7.
+    # This is a number for a person to read next to a picture.
     res = dict(area=100*float(lit.mean()), rb=float((R-B)[lit].mean()),
-               lum=float(L[lit].mean()))
+               lum=float(L[lit].mean()),
+               span_x=100*float((lit.any(axis=0)).mean()),
+               span_y=100*float((lit.any(axis=1)).mean()))
     if proof_name:
         PROOFS.mkdir(exist_ok=True)
         over = (arr * 0.30).astype(np.uint8)
@@ -325,7 +335,8 @@ def selftest():
     """
     import json, subprocess, tempfile
     ok = True
-    print("\n  FK-27 — --expect agrees or refuses; it is never discarded\n")
+    print("\n  FK-27/28/29 — the flag agrees or refuses · the gated mask has a proof ·\n"
+          "                the verdict names its scope\n")
     wrong = "warmer" if GATE_DIRECTION == "cooler" else "cooler"
     with tempfile.TemporaryDirectory() as d:
         p = pathlib.Path(d)
@@ -367,10 +378,10 @@ def selftest():
              lambda o, rc: "REFUSED" in o and rc == 2),
             (f"--expect {GATE_DIRECTION} agrees and the run proceeds",
              [str(p / "a.png"), str(p / "b.png"), "--pair", "--expect", GATE_DIRECTION],
-             lambda o, rc: "REFUSED" not in o and "rim colour on him" in o),
+             lambda o, rc: "REFUSED" not in o and "rim colour IN BOX" in o),
             ("the refusal arrives BEFORE the images are opened",
              [str(p / "nope.png"), str(p / "gone.png"), "--pair", "--expect", wrong],
-             lambda o, rc: "REFUSED" in o and rc == 2 and "rim colour on him" not in o),
+             lambda o, rc: "REFUSED" in o and rc == 2 and "rim colour IN BOX" not in o),
             ("default auto runs, and says which direction it gated",
              [str(p / "a.png"), str(p / "b.png"), "--pair"],
              lambda o, rc: f"gating a {GATE_DIRECTION.upper()} swing" in o),
@@ -386,6 +397,38 @@ def selftest():
              [str(p / "a.png"), str(p / "b.png"), "--pair"],
              lambda o, rc: "_rimchroma" in o and (p / "proofs" / "a_rimchroma.png").exists()
                            and (p / "proofs" / "b_rimchroma.png").exists()),
+            # FK-29. The verdict must name its scope, and the box must be
+            # nameable. The pair below is the whole point: the SAME command
+            # says something different about what it measured depending on
+            # whether anybody told it where the subject is.
+            ("with no --subject the verdict says it measured a REGION, not a person",
+             [str(p / "a.png"), str(p / "b.png"), "--pair"],
+             # NB: assert on the SCOPE block, which prints on FAIL as well as
+             # on PASS. The first version of this case also required the words
+             # from the PASS line, so it failed on a run that was FAILING for an
+             # unrelated reason -- a test that only holds when everything else
+             # is green tells you nothing on the day you need it.
+             lambda o, rc: "SCOPE: the DEFAULT head box" in o
+                           and "about a REGION and not" in o),
+            ("with --subject it says so, and drops the warning",
+             [str(p / "a.png"), str(p / "b.png"), "--pair",
+              "--subject", "0.25,0.02,0.45,0.55"],
+             lambda o, rc: "SCOPE: the DEFAULT" not in o),
+            ("--subject actually moves the box, it is not decoration",
+             [str(p / "a.png"), str(p / "b.png"), "--pair",
+              "--subject", "0.25,0.02,0.45,0.55"],
+             lambda o, rc: "30% x  90%" in o),
+            ("a reversed --subject box is refused, not silently normalised",
+             [str(p / "a.png"), str(p / "b.png"), "--pair", "--subject", "0.9,0.1,0.2,0.5"],
+             lambda o, rc: "must be X0,Y0,X1,Y1" in o and rc == 2),
+            ("the wrong NUMBER of --subject boxes is refused",
+             [str(p / "a.png"), str(p / "b.png"), "--pair",
+              "--subject", "0.2,0.1,0.4,0.5", "--subject", "0.2,0.1,0.4,0.5",
+              "--subject", "0.2,0.1,0.4,0.5"],
+             lambda o, rc: "Give one per image" in o and rc == 2),
+            ("...and one box for all images is allowed",
+             [str(p / "a.png"), str(p / "b.png"), "--pair", "--subject", "0.25,0.02,0.45,0.55"],
+             lambda o, rc: rc in (0, 1) and "Give one per image" not in o),
             ("...and that proof is a DIFFERENT file from the golden-rim one",
              [str(p / "a.png"), str(p / "b.png"), "--pair"],
              lambda o, rc: (p / "proofs" / "a_rimmask.png").exists()
@@ -419,6 +462,11 @@ def main():
                     help="the direction you believe the rim colour moves. Default auto = "
                          "the direction this gate was derived for. Naming the other one is "
                          "refused, not silently ignored.")
+    ap.add_argument("--subject", action="append", default=None, metavar="X0,Y0,X1,Y1",
+                    help="normalised box holding the SUBJECT in this frame, one per image "
+                         "in order. The default head box is fixed and the subject is not: "
+                         "a man twelve feet from the lens occupies a tenth of it, and the "
+                         "rest is room. FK-29.")
     ap.add_argument("--video", action="store_true")
     a = ap.parse_args()
 
@@ -444,6 +492,22 @@ def main():
         video_curve(a.images[0])
         return 0
 
+    def box_for(i):
+        if not a.subject:
+            return HEAD_BOX, False
+        if len(a.subject) not in (1, len(a.images)):
+            ap.error(f"--subject given {len(a.subject)} time(s) for {len(a.images)} image(s). "
+                     f"Give one per image, in order, or exactly one for all of them.")
+        spec = a.subject[i] if len(a.subject) > 1 else a.subject[0]
+        try:
+            v = tuple(float(x) for x in spec.split(","))
+        except ValueError:
+            ap.error(f"--subject {spec!r} is not four numbers separated by commas")
+        if len(v) != 4 or not all(0.0 <= x <= 1.0 for x in v) or v[0] >= v[2] or v[1] >= v[3]:
+            ap.error(f"--subject {spec!r} must be X0,Y0,X1,Y1 as fractions of the frame, "
+                     f"with X0<X1 and Y0<Y1")
+        return v, True
+
     rs = [measure(p) for p in a.images]
     for r in rs:
         show(r)
@@ -452,7 +516,8 @@ def main():
     if a.role and len(rs) == 1:
         g = ROLE_GATES[a.role]
         print(f"\n  role={a.role}: {g['note']}")
-        rc = rim_chroma(np.asarray(Image.open(a.images[0]).convert("RGB")), HEAD_BOX,
+        _box, _given = box_for(0)
+        rc = rim_chroma(np.asarray(Image.open(a.images[0]).convert("RGB")), _box,
                         proof_name=pathlib.Path(a.images[0]).stem)
         if rc is None:
             fail.append("no lit edge found in the head box at all — is there a person in it?")
@@ -480,9 +545,11 @@ def main():
         # The pair is now gated on the SWING IN THE RIM'S COLOUR, not on how much
         # golden light lands on him. See F-28: there is no golden light at the
         # window end of this room, so the old delta could only ever be negative.
-        sc = rim_chroma(np.asarray(Image.open(a.images[0]).convert("RGB")), HEAD_BOX,
+        _sbox, _sgiven = box_for(0)
+        _ebox, _egiven = box_for(1)
+        sc = rim_chroma(np.asarray(Image.open(a.images[0]).convert("RGB")), _sbox,
                         proof_name=pathlib.Path(a.images[0]).stem)
-        ec = rim_chroma(np.asarray(Image.open(a.images[1]).convert("RGB")), HEAD_BOX,
+        ec = rim_chroma(np.asarray(Image.open(a.images[1]).convert("RGB")), _ebox,
                         proof_name=pathlib.Path(a.images[1]).stem)
         # Name the direction in words, not only as the sign of a threshold. The
         # operator who typed `--expect warmer` read "(need <= -15.0)" and PASS
@@ -501,11 +568,19 @@ def main():
                   f"enough that this gate has nothing to measure — open the rim proof and see "
                   f"which.")
             return 1
-        print(f"        rim colour on him    start R-B {sc['rb']:+6.1f}  →  end "
+        print(f"        rim colour IN BOX    start R-B {sc['rb']:+6.1f}  →  end "
               f"{ec['rb']:+6.1f}    swing {ec['rb']-sc['rb']:+6.1f}   (need <= {-RIM_SWING_MIN:+.1f})")
         print(f"        rim brightness       {sc['lum']:6.1f}  →  {ec['lum']:6.1f}"
               f"    (must rise: he walks into the brighter end of the room)")
         print(f"        rim area             {sc['area']:6.2f}%  →  {ec['area']:6.2f}%")
+        # FK-29. HOW WIDE THE COUNTED MASK IS SPREAD ACROSS ITS OWN BOX.
+        # Reported, never gated -- see rim_chroma. On the origin film's end
+        # frame this read 99% / 97%, which is a glazing grid running edge to
+        # edge, and the mean of it was being printed as "rim colour on him".
+        print(f"        mask spread          {sc['span_x']:5.0f}% x {sc['span_y']:3.0f}%  →  "
+              f"{ec['span_x']:5.0f}% x {ec['span_y']:3.0f}%  of the box's columns x rows")
+        print(f"                             (context, NOT a gate: a rim on a person is "
+              f"compact; near 100% is architecture)")
         print(f"        room R-B             {s['rb_neutral']:+6.1f}  →  {e['rb_neutral']:+6.1f}"
               "    (the room swings cool too)")
         print(f"        golden-rim head-box  {s['rim_headbox_pct']:6.2f}%  →  "
@@ -522,6 +597,17 @@ def main():
               f"{ec['area']:.2f}% here.")
         print(f"        If the colour is on glazing bars or brass rather than on hair, a")
         print(f"        shoulder or a jacket edge, this gate is measuring the room, not the man.")
+        if not (_sgiven and _egiven):
+            # FK-29. The verdict must not imply something nobody established.
+            # This box is FIXED and the subject is not: in the origin film's end
+            # frame the hero is twelve feet from the lens and occupies about a
+            # tenth of it, and the other nine tenths are a window onto a lake.
+            # The tool cannot find him. It can refuse to pretend it did.
+            print(f"\n        \033[93mSCOPE: the DEFAULT head box\033[0m {HEAD_BOX}. Nothing has "
+                  f"established that\n        it contains only the subject, so the numbers above "
+                  f"are about a REGION and not\n        about a person. Name him and they become "
+                  f"about him:\n          --subject X0,Y0,X1,Y1  (one per image, in order, "
+                  f"fractions of the frame)")
         swing = ec["rb"] - sc["rb"]
         if swing > -RIM_SWING_MIN:
             fail.append(f"rim colour swing {swing:+.1f} is weaker than {-RIM_SWING_MIN:+.1f}. "
@@ -541,7 +627,11 @@ def main():
     # writes two DIFFERENT masks — and the operator reasonably opened the one
     # named in the per-frame block, which draws the metric this tool demotes to
     # context-only three lines above. Name the one that decided.
-    print("\n  \033[92mPASS\033[0m — now open the \033[1m_rimchroma\033[0m proof, which is the "
+    _scope = ("over the subject box you supplied" if (a.subject and a.pair)
+              else "over the DEFAULT head box — a region, not a person" if a.pair
+              else "")
+    print(f"\n  \033[92mPASS\033[0m {_scope}".rstrip() + " — now open the "
+          "\033[1m_rimchroma\033[0m proof, which is the "
           "mask this\n  verdict was computed from. The _rimmask pair is the golden-rim metric "
           "and it\n  gates nothing. This tool's first version was wrong about its mask and only "
           "a\n  proof revealed it; the second version was right about the mask and pointed at "
