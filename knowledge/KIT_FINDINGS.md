@@ -1152,3 +1152,62 @@ registration that it is not reading it. In such a surface the only control is th
 instruction — *credits are mine, always ask before spending* — which is a person's rule
 honoured by an assistant, not a gate. It has held so far. It is not the same kind of thing
 as a gate and this ledger should not let the two blur.
+
+---
+
+## FK-20 · BOTH MECHANISMS WERE KEYED TO A NAME, AND THE SERVICE HAS MORE THAN ONE
+
+<!-- guard: automatic   scope: delivery
+     ask: name every road to the thing you are guarding, not every name the thing is called by -->
+
+**What happened.** Probe 3 of the surface plan asked an assistant, in the desktop app, to
+check the Higgsfield balance. The expected answer was a refusal from the canary. What came
+back was **the balance** — 815.5 credits — and the reason was not that the hook failed:
+
+> *The Higgsfield MCP server isn't connected this session, so I read this via the higgsfield
+> CLI.*
+
+The gate's matcher is `mcp__higgsfield__.*`. A shell command is not that. `permissions.ask`
+was set on the same pattern, so it was not that either. **Both mechanisms were keyed to a
+NAME, and the service answers to more than one.**
+
+Nothing was spent, and the assistant said so unprompted — *"I haven't spent anything, and
+won't without asking."* That is a person's rule being honoured where a mechanism was absent,
+which is the exact distinction this kit exists to make and the exact substitution it exists
+to stop.
+
+**What the probe was worth.** It failed at its own job — A2 and A3 remain unmeasured, because
+the MCP path was never exercised — and found something larger than what it was looking for.
+That is worth saying plainly rather than filing it as a pass.
+
+**Fix, and the shape of it.**
+
+| | |
+|---|---|
+| `gate.py` | matches `Bash` too. A command reaching the service is DENIED unless named in `FREE_CLI` — one entry, `account status`, because one is all anyone has run and watched |
+| the registration | a second `Bash` matcher, generated like the first |
+| `permissions.ask` | now `["mcp__higgsfield__*", "Bash(higgsfield:*)"]` |
+| `filmkit-doctor` | an amber line stating that the CLI and API are covered WEAKLY, and why |
+
+**And the honest part.** On the MCP surface the gate denies by default, because one server is
+one namespace and an unclassified tool is *visible* as unclassified. **A shell is not a
+namespace.** The Bash check is a pattern match on a command line — an allow-list of dangers,
+the shape F-56 says only ever guards what has already gone wrong once. It does not see
+`curl` against the API, a script using the SDK, or a renamed binary. It is worth having and
+it is not equivalent, and doctor says so rather than letting a green line imply otherwise.
+
+**The transferable rule.** *Guard the resource, not the name of the door.* Enumerate the
+roads to the thing being protected — an MCP server, a CLI, an HTTP API, an SDK, a browser
+session — before choosing a matcher, because a matcher can only ever cover the roads you
+listed. Where a road cannot be covered by construction, say which one and how far the cover
+falls short.
+
+**What is not encoded:** the API and SDK roads remain open, and I do not know how to close
+them from a hook. A network-level control would, and that is outside what a per-project file
+can do. Until then the honest statement is that this kit gates the MCP road properly, the
+CLI road partially, and the direct-API road not at all.
+
+**Also surfaced, and it is the operator's to decide:** the Higgsfield account is
+`zeentraland@gmail.com`, which is not the address on the session. The assistant flagged it
+unasked. Nothing in this kit checks whose credits are at stake, and nothing here should
+without being told to.

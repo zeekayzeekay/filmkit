@@ -268,7 +268,7 @@ def check(film, facts_path, r):
             except Exception:
                 asked = []
         if any("higgsfield" in x for x in asked):
-            r.add(OK, "permissions.ask covers the whole generation server",
+            r.add(OK, "permissions.ask covers the generation server and the CLI",
                   "Enforced by the host, needs no trust step. It cannot read a receipt, so\n"
                   "it cannot replace the hook — it is what still holds if the hook does not\n"
                   "run in some surface.")
@@ -285,6 +285,14 @@ def check(film, facts_path, r):
               "is the one thing /hooks cannot tell you. Being ANSWERED means the hook is\n"
               "registered and not consulted — the exact failure this kit exists to catch.\n"
               "Then turn it off:  filmkit-doctor --canary off")
+
+    r.add(WARN, "the CLI and the API are covered WEAKLY, and only by pattern",
+          "The MCP surface is denied by default: one server is one namespace, so an\n"
+          "unclassified tool is visible as unclassified. A shell is not a namespace.\n"
+          "The Bash check is a pattern match on a command line — it does not see curl\n"
+          "against the API, an SDK script, or a renamed binary. Measured 2 Aug: with the\n"
+          "MCP server disconnected, an assistant reached the same account through the\n"
+          "CLI and nothing in this kit was in the way. FK-20.")
 
     r.add(WARN, "this gate covers a host that OPENS THIS FOLDER, and nothing else",
           "Any assistant session with the same generation tools attached but a\n"
@@ -339,8 +347,8 @@ def install(film, r):
             # only ever guards what has already gone wrong once. The cost is a
             # prompt on a balance check. That is the correct price.
             perms = existing.get("permissions") or {}
-            ask = [x for x in (perms.get("ask") or []) if x != "mcp__higgsfield__*"]
-            ask.append("mcp__higgsfield__*")
+            want = ["mcp__higgsfield__*", "Bash(higgsfield:*)"]
+            ask = [x for x in (perms.get("ask") or []) if x not in want] + want
             perms["ask"] = ask
             existing["permissions"] = perms
             existing["_filmkit"] = reg["_generated_by"]

@@ -99,9 +99,78 @@ def find_film(start):
     return None, None
 
 
+# ---------------------------------------------------------------------------
+# THE SAME SERVICE, REACHED ANOTHER WAY.
+#
+# Measured on the operator's machine: asked for a balance in a session where the
+# Higgsfield MCP server was not connected, the assistant reached the same account
+# through the `higgsfield` CLI and got the answer. The gate's matcher is
+# `mcp__higgsfield__.*`. A shell command is not that. Neither is `permissions.ask`
+# on the same pattern. **Both mechanisms were keyed to a NAME, and the service has
+# more than one name.**
+#
+# Nothing spent, because the assistant asked first. That is a person's judgement
+# operating where a mechanism was absent, which is the exact distinction this kit
+# exists to make.
+#
+# So Bash is matched too, and a command that reaches this service is DENIED unless
+# it is named here as read-only.
+#
+# BE HONEST ABOUT WHAT THIS IS. On the MCP surface the gate can deny by default,
+# because one server is one namespace and an unclassified tool is visible as
+# unclassified. A shell is not a namespace. This check is a PATTERN MATCH on a
+# command line -- an allow-list of dangers, the shape F-56 says only ever guards
+# what has already gone wrong once. It will not see `curl` against the API, a
+# Python script using the SDK, or a renamed binary. It is worth having and it is
+# not equivalent, and the report says so rather than letting the green line imply
+# otherwise.
+# ---------------------------------------------------------------------------
+CLI_NAMES = ("higgsfield",)
+
+# Read-only CLI invocations, allowed without a receipt. ONE entry, because one is
+# all anybody has actually run and watched. Adding another is a deliberate act
+# with a reason, exactly like FREE above -- not a widened wildcard.
+FREE_CLI = (
+    "account status",     # observed 2 Aug: returns a credit balance, spends nothing
+)
+
+
+def reaches_service(command):
+    """Does this shell command reach the generation service, and is it read-only?
+
+    Returns (reaches, is_free). Deliberately crude: a substring on the binary name
+    and an exact-ish match on the one subcommand anyone has watched."""
+    import re as _re
+    if not isinstance(command, str) or not command.strip():
+        return False, False
+    low = command.lower()
+    hit = any(_re.search(rf"(^|[\s;|&(]){_re.escape(n)}\b", low) for n in CLI_NAMES)
+    if not hit:
+        return False, False
+    return True, any(f in low for f in FREE_CLI)
+
+
 def decide(payload, *, now_utc=None, film_dir=None):
     """Pure function: payload in, (decision, reason) out. Testable without a host."""
     tool_full = payload.get("tool_name") or ""
+
+    if tool_full == "Bash":
+        cmd = (payload.get("tool_input") or {}).get("command")
+        reaches, free = reaches_service(cmd)
+        if reaches and not free:
+            return "deny", (
+                "filmkit REFUSED a shell command that reaches the generation service. The "
+                "receipt gate covers the MCP tools by name, and a command line is not one of "
+                "those names — so this path has no receipt to check and no way to acquire "
+                "one.\n"
+                "  Run the generation through the MCP tools, where the gate can verify a "
+                "receipt.\n"
+                "  If this command is read-only, add it to FREE_CLI in hooks/gate.py — "
+                "deliberately, with the reason.\n"
+                "  And know the limit: this check is a pattern match on a command line. It "
+                "does not see curl, an SDK script, or a renamed binary.")
+        return "allow", ""
+
     if not tool_full.startswith("mcp__higgsfield__"):
         return "allow", ""
     tool = tool_full[len("mcp__higgsfield__"):]
@@ -306,6 +375,21 @@ def selftest():
     case("an unclassified tool is denied, not guessed",
          call("some_new_paid_thing", prompt="x"), "deny")
     case("a spending tool with no prompt to check", call("upscale_video", id="abc"), "deny")
+
+    # THE OTHER ROAD TO THE SAME SERVICE. Both directions, because a Bash matcher
+    # that denies too much is worse than none: it would be switched off, and the
+    # MCP gate would go with it.
+    def sh(c):
+        return {"tool_name": "Bash", "tool_input": {"command": c}}
+    case("ordinary shell is none of our business", sh("ls -la"), "allow")
+    case("running the kit's own tests is not a spend", sh("python tests/verify.py"), "allow")
+    case("a word merely containing the name is not the binary", sh("echo higgsfielder"), "allow")
+    case("the CLI's read-only status call is free", sh("higgsfield account status"), "allow")
+    case("a CLI generation is refused — no receipt is reachable there",
+         sh("higgsfield generate video --prompt x"), "deny")
+    case("and it is found after a cd, not only at the start",
+         sh("cd C:/ai-video/tarn && higgsfield generate video"), "deny")
+    case("an empty command decides nothing", sh(""), "allow")
 
     # THE CANARY, both directions. A test that only checks it fires cannot tell a
     # working canary from one that refuses everything -- and a canary that
