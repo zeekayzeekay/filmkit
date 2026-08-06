@@ -190,6 +190,21 @@ def check(film, facts_path, r):
             r.add(WARN, "look_pack is not declared",
                   "Set it to a pack name or to null. Silence is not the same as none.")
 
+        # WHICH MCP SERVER IS THE PAID ONE?
+        # A host may expose it under a UUID rather than its name -- measured on
+        # this operator's machine -- and a gate keyed to the name allows every
+        # generation while every other line reads green.
+        declared = facts.get("generation_servers")
+        if declared:
+            r.add(OK, f"generation server(s) declared: {', '.join(declared)}")
+        else:
+            r.add(WARN, "no generation_servers declared — the gate matches the NAME only",
+                  "Ask your assistant, in the surface you fire from: what prefix are the\n"
+                  "generation tools exposed under? If it is a UUID rather than the service\n"
+                  "name, the gate will not classify those calls. It refuses undeclared\n"
+                  "servers whose tools look like this service — a net, not a mechanism.\n"
+                  'Declare it once:  "generation_servers": ["higgsfield", "<uuid>"]')
+
         # DOES THIS FILM TELL THE KIT ITS OWN FILENAMES?
         # Until it does, the tools look for the names filmkit-init writes, find
         # nothing, and report nothing found -- which, on a film with 74 findings

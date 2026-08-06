@@ -1376,3 +1376,57 @@ building. This gate was designed around MCP because MCP was what I could see fro
 accepts a prompt any way other than `--prompt` — a file, stdin, an environment variable.
 Each of those would be a road past the receipt check, and each would come back as an allow,
 which is no evidence at all.
+
+---
+
+## FK-24 · THE PRIMARY ROAD WAS WIDE OPEN, UNDER A UUID
+
+<!-- guard: automatic   scope: delivery
+     ask: what prefix are the tools ACTUALLY exposed under on the machine that will fire them? -->
+
+**What happened.** He authenticated the Higgsfield MCP server from an interactive CLI
+session, then opened a desktop Code session and asked Probe 0. The tools were there. And
+they were called:
+
+```
+mcp__39ed6063-8f2f-4bd8-a682-0a8bfa58d8f4__generate_video
+```
+
+A **UUID prefix**. Every version of this gate tested `startswith("mcp__higgsfield__")`, so
+every one of them would have returned **allow** for every generation on his machine — the
+primary road, wide open, in the file whose only job is to close it. Doctor would have
+reported green throughout, because everything doctor checks was correct.
+
+The assistant in that session noticed unasked and said so before anyone relied on it. Second
+time this week that a session on his machine caught something the design missed.
+
+**This is the fourth name.** `mcp__higgsfield__.*` missed the CLI (FK-20). Adding `Bash`
+missed `PowerShell` (FK-21). The matcher became `.*` and the *decision* still keyed on a
+server name — so the fix for keying on names kept keying on a name, one layer in, three
+times.
+
+**Fix, and only one half of it is sound.**
+
+1. **Declaration.** `film_facts.json > generation_servers` names the prefixes that reach the
+   paid service. Explicit, portable, and DATA — a UUID belongs to a machine, not to a kit.
+   A declared server is classified exactly like the documented one: free tools free, spends
+   need a receipt.
+2. **A net.** If an *undeclared* server exposes a tool whose name is in this service's
+   vocabulary — `balance`, `generate_video`, `upscale_image` — the call is refused and the
+   operator is told to declare it. This is a heuristic, labelled as one in the code. It
+   exists to turn a silent allow into a loud refusal, not to be relied on. A genuinely
+   unknown server with unfamiliar tool names still passes, because a gate that denied every
+   MCP call on the machine would be switched off within the hour.
+
+`filmkit-doctor` now reports the declaration, and warns when there is none.
+
+**The transferable rule.** *Ask what the thing is called ON THE MACHINE THAT WILL RUN IT,
+before writing anything that matches a name.* One question in the surface he fires from —
+"what prefix are these tools exposed under?" — would have answered this on day one, and it
+is the same question that would have answered FK-20 and FK-21. I asked it only after the
+third failure, and only because he ran a probe I had written for something else.
+
+**What is not encoded:** whether that UUID is stable. If a host re-registers the server with
+a new identifier, the declaration goes stale and the net catches it as an undeclared
+server — a refusal, which is the right direction, but the operator will have to notice and
+update. Nothing here detects the change.

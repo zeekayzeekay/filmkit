@@ -76,6 +76,66 @@ FREE = {
 }
 
 
+# ---------------------------------------------------------------------------
+# WHICH MCP SERVER IS THE PAID ONE.
+#
+# Measured 6 Aug, and it is the fourth time a NAME has been the fault. The
+# operator's host exposes the generation server as
+#
+#     mcp__39ed6063-8f2f-4bd8-a682-0a8bfa58d8f4__generate_video
+#
+# a UUID prefix, not `mcp__higgsfield__*`. Every version of this gate up to now
+# tested `startswith("mcp__higgsfield__")` and would have returned ALLOW for
+# every generation on his machine -- the PRIMARY road, wide open, in a file whose
+# only job is to close it. The assistant in that session spotted it unasked and
+# said so before anyone relied on it.
+#
+# TWO MECHANISMS, AND ONLY ONE OF THEM IS SOUND.
+#
+# 1. DECLARATION. The film names the servers that reach the paid service, in
+#    `film_facts.json > generation_servers`. Explicit, portable, and it is DATA:
+#    a UUID belongs to a machine, not to a kit. This is the real fix.
+#
+# 2. A NET, for when nobody has declared anything. If a server nobody declared
+#    exposes a tool whose name is in this service's vocabulary -- `balance`,
+#    `generate_video`, `upscale_image` -- the call is REFUSED and the operator is
+#    told to declare it. This is a heuristic and it is here to turn a silent
+#    allow into a loud refusal, not to be relied on. A genuinely unknown server
+#    with unfamiliar tool names still passes, because a gate that denied every
+#    MCP call on the machine would be switched off within an hour.
+# ---------------------------------------------------------------------------
+SUSPECT_PREFIXES = ("generate", "upscale", "outpaint", "reframe", "motion_",
+                    "remove_background", "dubbing", "voice_", "create_voice",
+                    "shorts_studio", "personal_clipper", "video_analysis",
+                    "apps_invoke", "soul", "marketing_studio")
+
+
+def declared_servers(payload, film_dir):
+    """Server prefixes this film says reach the paid service.
+
+    `higgsfield` is always included: it is the documented name, and a film that
+    declares a UUID has not thereby stopped using the name."""
+    import json as _json
+    out = {"higgsfield"}
+    film = pathlib.Path(film_dir) if film_dir else find_film(payload.get("cwd"))[0]
+    if film:
+        for c in sorted(pathlib.Path(film).glob("*_facts.json")):
+            try:
+                d = _json.loads(c.read_text(encoding="utf-8"))
+            except Exception:
+                break
+            for s in d.get("generation_servers") or []:
+                if isinstance(s, str) and s.strip():
+                    out.add(s.strip())
+            break
+    return out
+
+
+def looks_like_this_service(tool):
+    """Heuristic, and labelled as one. See the note above."""
+    return tool in FREE or any(tool.startswith(p) for p in SUSPECT_PREFIXES)
+
+
 def find_film(start):
     """
     Locate the film from the directory the HOST reports, walking up.
@@ -279,9 +339,22 @@ def _decide(payload, *, now_utc=None, film_dir=None):
                 "  see curl, an SDK script, or a renamed binary.")
         return "allow", ""
 
-    if not tool_full.startswith("mcp__higgsfield__"):
+    if not tool_full.startswith("mcp__"):
         return "allow", ""
-    tool = tool_full[len("mcp__higgsfield__"):]
+    server, _sep, tool = tool_full[len("mcp__"):].partition("__")
+    if server not in declared_servers(payload, film_dir):
+        if looks_like_this_service(tool):
+            return "deny", (
+                f"filmkit REFUSED {tool_full}. The server {server!r} is not declared as a "
+                f"generation service, and it exposes a tool named {tool!r} — which is this "
+                f"service's vocabulary.\n"
+                f"  A host may expose the same server under a UUID rather than its name, and "
+                f"a gate\n"
+                f"  keyed to the name would allow every generation while looking correct.\n"
+                f"  Declare it, once, in the film's facts file:\n"
+                f'    "generation_servers": ["higgsfield", "{server}"]\n'
+                f"  Then this gate checks receipts on it exactly as it does on any other.")
+        return "allow", ""
 
     # ---- THE CANARY -------------------------------------------------------
     # /hooks proves a hook is LOADED. It does not prove the host CONSULTS it
@@ -472,6 +545,12 @@ def selftest():
     ok = True
     _ALL_CASES = []
 
+    # a film that DECLARES a uuid server, so both directions can be asserted
+    _dtmp = tempfile.mkdtemp(prefix="gate-declared-")
+    _DECLARED_FILM = _dtmp
+    (pathlib.Path(_dtmp) / "film_facts.json").write_text(
+        json.dumps({"_fact_rev": 1, "generation_servers": ["abc-123"]}), encoding="utf-8")
+
     def case(name, payload, want, **kw):
         nonlocal ok
         _ALL_CASES.append((name, payload, want, kw))
@@ -488,6 +567,25 @@ def selftest():
     print("\n  GATE SELFTEST\n")
     case("another server is none of our business",
          {"tool_name": "mcp__Gmail__search_threads", "tool_input": {}}, "allow")
+    case("a document server creating a file is not a generation",
+         {"tool_name": "mcp__Google_Drive__create_file", "tool_input": {"prompt": "x"}},
+         "allow")
+
+    # THE SERVER PREFIX IS NOT THE POINT EITHER. His host exposes the generation
+    # server under a UUID; a gate keyed to the documented name allowed every
+    # generation on his machine while looking correct.
+    case("an UNDECLARED server exposing this service's vocabulary is refused",
+         {"tool_name": "mcp__39ed6063-8f2f-4bd8-a682-0a8bfa58d8f4__generate_video",
+          "tool_input": {"prompt": "a man"}}, "deny")
+    case("...including its free-looking tools, because the server is the question",
+         {"tool_name": "mcp__39ed6063-8f2f-4bd8-a682-0a8bfa58d8f4__balance",
+          "tool_input": {}}, "deny")
+    case("a DECLARED uuid server is classified normally: free stays free",
+         {"tool_name": "mcp__abc-123__balance", "tool_input": {}}, "allow",
+         film_dir=_DECLARED_FILM)
+    case("a DECLARED uuid server still needs a receipt to generate",
+         {"tool_name": "mcp__abc-123__generate_video", "tool_input": {"prompt": "a man"}},
+         "deny", film_dir=_DECLARED_FILM)
     case("reading the balance is free", call("balance"), "allow")
     case("uploading a reference is free", call("media_upload", path="x.png"), "allow")
     case("generate_video with no receipt", call("generate_video", prompt="a man"), "deny")
