@@ -196,9 +196,24 @@ def check_frames(start, end, expect):
         print("  " + "\n  ".join(l for l in out.splitlines() if l.strip()))
         ok &= (code == 0)
     if start and end:
-        code, out = run([sys.executable, P.tool("frames_check.py"), start, end,
-                         "--pair", "--expect", expect])
-        print("  " + "\n  ".join(l for l in out.splitlines()[-6:] if l.strip()))
+        # FK-27. This used to pass `--expect warmer` on EVERY run, because that
+        # was preflight's own argparse default — a direction nobody had chosen,
+        # asserted every time, into a flag that then ignored it. The moment
+        # frames_check started refusing a direction it does not gate, that
+        # silent default would have made preflight refuse its own frames phase
+        # on every film. A default is an assertion; this one was never made by
+        # anybody. Pass the flag only when the operator named a direction.
+        argv = [sys.executable, P.tool("frames_check.py"), start, end, "--pair"]
+        if expect:
+            argv += ["--expect", expect]
+        code, out = run(argv)
+        # Show the TAIL on success and the WHOLE thing on failure. The tail is
+        # the summary block, which is all anybody wants when it passes -- but a
+        # refusal puts its headline FIRST, so `[-6:]` printed the reasoning and
+        # cut off the word REFUSED. A truncation tuned to the passing case
+        # silently edits the failing one.
+        lines = out.splitlines() if code != 0 else out.splitlines()[-6:]
+        print("  " + "\n  ".join(l for l in lines if l.strip()))
         ok &= (code == 0)
     return ok
 
@@ -437,7 +452,9 @@ def main():
     ap.add_argument("--block")
     ap.add_argument("--start")
     ap.add_argument("--end")
-    ap.add_argument("--expect", default="warmer")
+    ap.add_argument("--expect", choices=["warmer", "cooler", "auto"], default=None,
+                    help="pass a direction through to frames_check. Default: pass nothing, "
+                         "and let the gate use the direction it was derived for. FK-27.")
     ap.add_argument("--fixtures", action="store_true")
     ap.add_argument("--record", help="run record holding the answers to the manual items")
     ap.add_argument("--export", help="write the block to this file and verify it matches")

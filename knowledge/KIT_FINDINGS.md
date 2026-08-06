@@ -1658,3 +1658,21 @@ looks exactly like the green that answers you.
 **What is not encoded:** whether `GATE_DIRECTION` is the right direction for any room. It is
 a measurement, it is recorded under F-28, and the selftest says in its own closing line that
 it does not test it.
+
+### FK-27b · the fix broke preflight, in the same shape as the fault
+
+`preflight.py` declared `--expect` with `default="warmer"` and passed it to `frames_check`
+on **every** run. Nobody had ever chosen that direction; it was an argparse default asserting
+a physical claim about a room. While the flag was dead this was invisible. The moment
+`frames_check` started refusing a direction it does not gate, **preflight would have refused
+its own frames phase on every film** — a fix producing the fault it was written against, one
+layer up.
+
+*A default is an assertion, and this one was never made by anybody.* Now `None`: the flag is
+forwarded only when an operator names a direction.
+
+**And one more, found while confirming the above.** `check_frames` printed
+`out.splitlines()[-6:]` — the tail, because on success the tail is the summary block. A
+refusal puts its headline **first**, so the operator saw the reasoning with the word REFUSED
+cut off the top. *A truncation tuned to the passing case silently edits the failing one.*
+Whole output on non-zero, tail on zero.
