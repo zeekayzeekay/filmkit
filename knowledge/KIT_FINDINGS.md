@@ -1436,3 +1436,44 @@ third failure, and only because he ran a probe I had written for something else.
 a new identifier, the declaration goes stale and the net catches it as an undeclared
 server — a refusal, which is the right direction, but the operator will have to notice and
 update. Nothing here detects the change.
+
+---
+
+## FK-25 · THE TOOL FOR "WHAT IS OUTSTANDING" REPORTED EVERYTHING AS OUTSTANDING
+
+<!-- guard: manual   scope: process
+     ask: does this command answer the question the operator asked, or a different one that shares its name? -->
+
+**What happened.** The session briefing said *"32 manual review item(s); 5 with no written
+answer"*. Asked which five, I sent the operator to `checklist.py --manual`. It printed all
+thirty-two, every one marked `> unanswered`.
+
+Nothing was wrong. `--manual` prints a **blank run record** — a form to be filled in — and a
+blank form says `unanswered` on every line. But the operator had asked *which are
+outstanding*, and the answer that came back reads as *none of them are done*, against a film
+where twenty-seven were.
+
+**Why this belongs in the ledger rather than being a papercut.** It is the same shape as
+FK-13, FK-19 and half of this week: **a true report that answers a different question than
+the one being asked, in a form indistinguishable from the answer.** The tool was correct.
+The number was wrong by twenty-seven. And it was wrong in the alarming direction, which is
+the direction that gets acted on.
+
+**Fix.** `checklist.py --outstanding` — the manual items with no written answer, paired
+**by finding id**, with each question printed. `--manual` is untouched: `preflight` parses
+its output, and changing it would alter the acceptance comparison against the origin
+project's own scripts for no reason.
+
+The real five, on this film: **F-57, F-58, F-61, F-63, F-64** — the five most recently added
+findings, never yet answered because the run record predates them.
+
+**The transferable rule.** *A command named for an artefact answers "what does the artefact
+look like"; the operator is usually asking "what is left".* Those are different questions and
+the second one deserves its own verb. Where a tool can print both a template and a state,
+the state is what somebody is asking for at 1 a.m., and the template is what they will get
+if nobody thought about it.
+
+**What is not encoded:** whether an answer is any *good*. `--outstanding` checks that a
+finding id appears in the run record — presence, not quality. Preflight does the same. Only
+a person checks the second, which is exactly why these items are `manual` and not
+`automatic`.

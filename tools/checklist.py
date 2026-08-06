@@ -138,14 +138,57 @@ def run_record(fs):
     return "\n".join(L) + "\n"
 
 
+def outstanding(fs):
+    """Which manual items have NO written answer in the run record.
+
+    `--manual` prints a BLANK form: every item reads `unanswered`, because that is
+    what a blank form says. Asked which items were outstanding, the operator ran
+    it and got 32 lines of `unanswered` against a film where 27 were answered --
+    a report that reads as the exact opposite of the truth, from a tool doing
+    precisely what it was written to do.
+
+    Pairing is by FINDING ID, never by item number. F-49: M-numbers are positions
+    in the ledger, so inserting one finding renumbers every later item, and a
+    matcher keyed on the number alone slides each answer onto the NEXT question.
+    Ten of twenty-five were mis-paired when that was found.
+    """
+    manual = [f for f in fs if f.get("guard") == "manual"]
+    rec = P.files("run_record")
+    if not rec.exists():
+        print(f"\n  no {rec.name} — all {len(manual)} manual item(s) are outstanding,")
+        print("  which is correct for a film where nobody has run the review yet.\n")
+        return 1
+    txt = rec.read_text(encoding="utf-8")
+    todo = [f for f in manual if f["id"] not in txt]
+    print(f"\n  {len(manual)} manual item(s) · {len(manual) - len(todo)} answered · "
+          f"{len(todo)} OUTSTANDING\n")
+    for f in todo:
+        print(f"  {f['id']}")
+        for line in __import__("textwrap").wrap(f.get("ask") or "(no question recorded)", 74):
+            print(f"      {line}")
+        print()
+    if not todo:
+        print("  Every manual item has an answer against its finding id. That is not the "
+              "same\n  as a good answer — preflight checks presence, and only a person "
+              "checks quality.\n")
+        return 0
+    print("  An answer is one line, written against the finding id, in "
+          f"{rec.name}.\n")
+    return 1
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--manual", action="store_true", help="print a blank run record")
+    ap.add_argument("--manual", action="store_true", help="print a BLANK run record")
+    ap.add_argument("--outstanding", action="store_true",
+                    help="which manual items have no written answer yet")
     a = ap.parse_args()
     fs = findings()
     if a.manual:
         print(run_record(fs))
         return 0
+    if a.outstanding:
+        return outstanding(fs)
     OUT.write_text(render(fs), encoding="utf-8")
     m = sum(1 for f in fs if f["guard"] == "manual")
     u = sum(1 for f in fs if not f["guard"])
