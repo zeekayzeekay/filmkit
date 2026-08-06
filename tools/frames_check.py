@@ -594,9 +594,24 @@ def main():
               f"    (must rise: he walks into the brighter end of the room)")
         print(f"        rim area             {sc['area']:6.2f}%  →  {ec['area']:6.2f}%")
         # FK-29. HOW WIDE THE COUNTED MASK IS SPREAD ACROSS ITS OWN BOX.
-        # Reported, never gated -- see rim_chroma. On the origin film's end
-        # frame this read 99% / 97%, which is a glazing grid running edge to
-        # edge, and the mean of it was being printed as "rim colour on him".
+        # Reported, never gated -- see rim_chroma.
+        #
+        # FK-32. THIS COMMENT USED TO CARRY A MEASUREMENT I NEVER TOOK. It said
+        # "on the origin film's end frame this read 99% / 97%", written before
+        # the feature had ever run on that film. The real numbers, when it did:
+        #
+        #     default box   80% x 92%  ->  100% x 75%
+        #     subject box  100% x 95%  ->   94% x 98%
+        #
+        # A fabricated number in a source comment is worse than one in a message
+        # -- a message is read once and a comment is inherited by whoever
+        # changes this next, as though it were evidence. And it is the same
+        # fault the film's own F-61 exists for: a counting claim stated without
+        # the crop. Third time in one session that I have written a figure I had
+        # not measured.
+        #
+        # The real numbers also make FK-30's point better than my invention did:
+        # spread barely separates a box full of glazing from a box round a man.
         print(f"        mask spread          {sc['span_x']:5.0f}% x {sc['span_y']:3.0f}%  →  "
               f"{ec['span_x']:5.0f}% x {ec['span_y']:3.0f}%  of the box's columns x rows")
         # FK-30. THE LINE THAT USED TO BE HERE SAID "near 100% is

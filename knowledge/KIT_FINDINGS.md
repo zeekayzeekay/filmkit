@@ -1760,8 +1760,10 @@ The gate reported a cool rim on him while the only rim on him was warm, and the 
 passed is manufactured almost entirely by the end frame's box containing a lake and a
 mountain range that the start frame's box does not.
 
-**Mask spread, measured after the fact:** the counted pixels occupy essentially every column
-of that crop. A rim on a person is compact. A glazing grid runs edge to edge.
+**Mask spread:** ~~the counted pixels occupy essentially every column of that crop~~ —
+**retracted, see FK-32.** That sentence, and a "99% / 97%" in the source comment beside it,
+were written before the feature had ever run on this film. The measured values are
+`80% x 92% -> 100% x 75%`.
 
 **Why the box cannot work here.** `HEAD_BOX` is a fixed fraction of the frame. It was
 measured for a man standing at a counter and filling it. In the end frame he is twelve feet
@@ -1998,3 +2000,54 @@ correctly skipped.
 `scripts()` answers "what code do we own", and it was reached for to answer "what bytes do we
 ship". Both are lists of files in the same repo, which is exactly why the substitution is
 invisible — and why the report was wrong by a factor of nearly three while looking complete.
+
+---
+
+## FK-32 · I PUT A MEASUREMENT I NEVER TOOK INTO A SOURCE COMMENT
+
+**Cost:** none. It is here because of where it was written, not what it cost.
+
+**What happened.** FK-29 added the mask-spread number. The comment I wrote beside it said:
+
+> *On the origin film's end frame this read 99% / 97%, which is a glazing grid running edge to
+> edge, and the mean of it was being printed as "rim colour on him".*
+
+**The feature had never been run on that film.** I wrote the figure to illustrate the point I
+was making. The findings entry carried the same invention, dressed better — *"Mask spread,
+measured after the fact"* — which claims a measurement in the words themselves.
+
+The real numbers, from the run:
+
+| | start → end |
+|---|---|
+| default box | `80% x 92% → 100% x 75%` |
+| subject box | `100% x 95% → 94% x 98%` |
+
+**Not close, and not in the shape I claimed.** The end frame's row-span *falls* on the default
+box. My invented pair pointed the same way as my argument; the real pair does not, and the
+real pair makes **FK-30's** point better than the fiction did — spread barely separates a box
+full of glazing from a box drawn round a man.
+
+**Why a comment is worse than a message.** A message is read once, by somebody who can ask.
+A comment is **inherited by whoever changes that code next, as evidence**, and it will sit
+directly beside the line it is wrong about. I have spent this session finding numbers in this
+project that were true of one thing and quoted about another. This one was true of nothing.
+
+**And it is the film's own F-61, in the kit.** *"Did this observation come from a crop at
+feature scale, or from a picture I scrolled past?"* — the finding about stating a count off a
+downscale. This was a count off nothing. **Third time in one session I have written a figure
+I had not measured**, after the `+3.5 / −20.8` reading and the CRLF consequence.
+
+**Fix.** The comment now carries the measured values and says the previous ones were invented.
+The findings entry is struck through rather than edited, because a retraction that leaves no
+trace is how a ledger stops being one.
+
+**The transferable rule.** *An illustrative number is a measurement to everyone who reads it
+later.* There is no notation in a source comment for "roughly, for the sake of argument", and
+if there were nobody would believe it. Either measure it, or describe the shape in words and
+name nothing.
+
+**What this does not change:** FK-29 and FK-30 both stand. FK-29 rested on the *picture* — the
+operator's description of blue on the glazing and orange on the man — and FK-30 rested on the
+threshold's provenance. Neither ever depended on the spread number. That is luck rather than
+design, and it is worth saying which.
