@@ -1594,12 +1594,63 @@ def dump_subject(text, only, subject):
 
 
 def main():
+    # FK-37b. FILE IS OPTIONAL, AND FK-37 SAID THIS TOOL DID NOT EXIST.
+    #
+    # FK-37 fixed patch_block.py and asserted, in the finding, that it was "the
+    # ONLY tool in this kit that takes a positional FILE". It was not. This one
+    # does too, and the AST scan I ran to check could not see it, because this
+    # main() hand-parses sys.argv and never calls add_argument. I checked with an
+    # instrument blind to the case I was checking for, then published the
+    # negative result as a fact.
+    #
+    # Same fix: without a FILE the block is looked up across every ledger the
+    # film declares, and a missing file refuses with a sentence instead of a
+    # traceback.
     args = [a for a in sys.argv[1:]]
     if "--project" in args:
         i = args.index("--project"); del args[i:i + 2]
-    path = pathlib.Path(args[0])
     only = sys.argv[sys.argv.index("--block") + 1] if "--block" in sys.argv else None
-    text = path.read_text(encoding="utf-8")
+    positional = [a for a in args if not a.startswith("-")]
+    flagged = set()
+    for flag in ("--block", "--subject"):
+        if flag in args:
+            j = args.index(flag)
+            if j + 1 < len(args):
+                flagged.add(args[j + 1])
+    positional = [a for a in positional if a not in flagged]
+
+    if positional:
+        path = pathlib.Path(positional[0])
+        if not path.exists():
+            print(f"\n  ! no such file: {positional[0]!r}")
+            print("    FILE is optional and comes FIRST. To name a block, use --block:")
+            print(f'      python3 lint_prompt.py --block "{only or "NAME"}"\n')
+            return 2
+        text = path.read_text(encoding="utf-8")
+    else:
+        import _project as P
+        ledgers = [f for f in P.file_list("prompts") if f.exists()]
+        if not ledgers:
+            print("  the film declares no prompt ledger that exists")
+            return 2
+        if only:
+            holding = [f for f in ledgers
+                       if any(only.lower() in t.lower()
+                              for t, _, _ in blocks(f.read_text(encoding="utf-8")))]
+            if not holding:
+                print(f"  no block matching {only!r} in "
+                      + ", ".join(f.name for f in ledgers))
+                return 2
+            if len(holding) > 1:
+                print(f"  {only!r} matches blocks in {len(holding)} ledgers — "
+                      f"REFUSING, name the file:")
+                for f in holding:
+                    print(f"    {f.name}")
+                return 2
+            text = holding[0].read_text(encoding="utf-8")
+        else:
+            # No block named: lint every declared ledger, in order.
+            text = "\n".join(f.read_text(encoding="utf-8") for f in ledgers)
     if "--subject" in sys.argv:
         dump_subject(text, only, sys.argv[sys.argv.index("--subject") + 1])
         return

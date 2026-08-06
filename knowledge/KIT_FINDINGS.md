@@ -2377,3 +2377,31 @@ the calling convention now matches, and the old form still works.
 
 **What is not encoded:** whether the block a name matches is the one you meant. Ambiguity is
 refused, absence is refused, and a single match is trusted — as it always was.
+
+### FK-37b · and the finding asserted a uniqueness I had checked with a blind instrument
+
+FK-37 said, in the ledger:
+
+> *`patch_block.py` is the **only** tool in this kit that takes a positional FILE.*
+
+**It is not.** `lint_prompt.py` does too, and the operator hit it on the very next runbook —
+same shape, same traceback, on a command I had written the same wrong way twice.
+
+**Why my check missed it.** Before publishing FK-37 I ran an AST scan over every script for
+`add_argument` calls with a non-flag first argument. `lint_prompt.py`'s `main()` **hand-parses
+`sys.argv`** and never calls `add_argument`, so the scan could not see it. **I checked with an
+instrument blind to the case I was checking for, and published the negative result as a fact.**
+
+That is a sharper version of the same week's habit than the ones before it. FK-31's
+consequence and FK-32's figure were things I never checked. This one I *did* check — and the
+check was incapable of the answer, which is worse, because running it felt like diligence.
+
+**Fix.** Same as FK-37: `FILE` optional, the block looked up across every declared ledger,
+ambiguity refused by name, a missing file refused with a sentence and the correct invocation.
+The old positional form still works, so `preflight` — which passes the file explicitly — is
+untouched.
+
+**The transferable rule.** *A negative result is only as strong as the instrument's coverage,
+and coverage is the thing least likely to be checked.* Before asserting "X is the only one",
+say how you looked and what that way of looking cannot see. Here: an AST scan for argparse
+cannot see argv parsed by hand, and roughly a third of the CLIs in any Python codebase are.
