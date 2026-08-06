@@ -99,10 +99,77 @@ CASES = [
 ]
 
 
-def run_case(body):
+# FK-26. A LIVE block may not name a conditioning frame that is not the current
+# selection. The last two cases are the origin's own first line, reproduced
+# character for character including the markdown emphasis — the regex IS the
+# guard, and a regex tested only against text written to suit it is tested
+# against nothing.
+SEL = {"start": {"file": "G3/k5-30.png", "selected_on": "2026-07-31", "at_rev": 16},
+       "end": {"file": "G3/k6-v16-output.png", "selected_on": "2026-07-31", "at_rev": 29}}
+
+_ORIGIN_LINE = (
+    "**Elements:** `@cafe_int` `@hero` · **`start_image` = `G3/k5-24.png` · "
+    "`end_image` = `G3/k6-3.png`** · **duration 12** · `seedance_2_0`\n")
+
+FRAME_CASES = [
+    # (name, prompts body, selections, want-substring or None for "accepted")
+    ("a LIVE block naming the current selection is accepted",
+     "# The prompt\n<!-- status: LIVE  role: g3 -->\n`start_image` = `G3/k5-30.png`\n",
+     SEL, None),
+    ("a LIVE block naming a superseded frame is refused",
+     "# The prompt\n<!-- status: LIVE  role: g3 -->\n`start_image` = `G3/k5-24.png`\n",
+     SEL, "selections.start is G3/k5-30.png"),
+    ("...and the refusal names the dead frame too, not only the live one",
+     "# The prompt\n<!-- status: LIVE  role: g3 -->\n`start_image` = `G3/k5-24.png`\n",
+     SEL, "start_image = G3/k5-24.png"),
+    # THE DISCRIMINATION CONTROL. A superseded block naming the frame it was
+    # fired with is not stale — it IS the record. A rule that cannot tell those
+    # apart asks the project to delete its own history to satisfy a checker.
+    ("a SUPERSEDED block naming the OLD frame is accepted — that is the record",
+     "# The old prompt\n<!-- status: SUPERSEDED by: `v4` -->\n"
+     "`start_image` = `G3/k5-24.png`\n",
+     SEL, None),
+    ("a DRAFT block naming another frame is accepted — it has not been fired",
+     "# Next one\n<!-- status: DRAFT -->\n`start_image` = `G3/k5-24.png`\n",
+     SEL, None),
+    # Prose naming the ROLE is not a claim about a FILE. The origin says
+    # "roles `start_image` / `end_image`" in three places nobody would call a
+    # frame reference, and a guard that reads those as claims gets switched off.
+    ("naming the role in prose with no file is not read as a claim",
+     "# The prompt\n<!-- status: LIVE  role: g3 -->\n"
+     "Pass them in `medias[]` with roles `start_image` and `end_image`.\n",
+     SEL, None),
+    ("job ids are not filenames",
+     "# The prompt\n<!-- status: LIVE  role: g3 -->\n"
+     "**start_image** `1bb6178a…` · **end_image** `94e40bb1…` · **duration 10**\n",
+     SEL, None),
+    ("a leading ./ is the same file",
+     "# The prompt\n<!-- status: LIVE  role: g3 -->\n`start_image` = `./G3/k5-30.png`\n",
+     SEL, None),
+    ("a role the film does not select is reported UNCHECKED, not passed",
+     "# The prompt\n<!-- status: LIVE  role: g3 -->\n`middle_image` = `G3/x.png`\n",
+     SEL, "NOT CHECKED"),
+    ("a film with no selections at all says nothing and exits 0",
+     "# The prompt\n<!-- status: LIVE  role: g3 -->\n`start_image` = `G3/k5-24.png`\n",
+     None, None),
+    ("the origin's own first line, character for character, is refused",
+     "# G3 v4 · SHOTS 5 + 6 — the turn and the walk · 12s · 54 cr at 720p std\n"
+     "<!-- status: LIVE  role: G3 -->\n" + _ORIGIN_LINE,
+     SEL, "selections.end is G3/k6-v16-output.png"),
+    ("...and it catches BOTH frames in that line, not only the first",
+     "# G3 v4 · SHOTS 5 + 6 — the turn and the walk · 12s · 54 cr at 720p std\n"
+     "<!-- status: LIVE  role: G3 -->\n" + _ORIGIN_LINE,
+     SEL, "selections.start is G3/k5-30.png"),
+]
+
+
+def run_case(body, selections="unset"):
     with tempfile.TemporaryDirectory() as d:
         film = pathlib.Path(d)
-        (film / "film_facts.json").write_text(json.dumps(FACTS), encoding="utf-8")
+        facts = dict(FACTS)
+        if selections != "unset" and selections is not None:
+            facts["selections"] = selections
+        (film / "film_facts.json").write_text(json.dumps(facts), encoding="utf-8")
         (film / "PROMPTS.md").write_text(body, encoding="utf-8")
         p = subprocess.run([sys.executable, str(KIT / "tools" / "staleness.py"),
                             "--project", str(film / "film_facts.json")],
@@ -138,6 +205,21 @@ def main():
     ok &= good
     print(f"  {'ok ' if good else '!! '}...and it is asked once, not once per heading "
           f"(counted {n})")
+
+    print("\n  FK-26 — a LIVE block may not name a frame that is not the selection\n")
+    for name, body, sel, want in FRAME_CASES:
+        out, rc = run_case(body, sel)
+        if "Traceback" in out:
+            good = False
+        elif want is None:
+            good = rc == 0
+        else:
+            good = want in out
+        ok &= good
+        print(f"  {'ok ' if good else '!! '}{name}")
+        if not good:
+            for line in out.strip().splitlines()[-4:]:
+                print(f"       {line[:100]}")
 
     print()
     print("  \033[92mNo faults of any known class.\033[0m" if ok

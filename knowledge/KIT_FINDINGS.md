@@ -1477,3 +1477,86 @@ if nobody thought about it.
 finding id appears in the run record — presence, not quality. Preflight does the same. Only
 a person checks the second, which is exactly why these items are `manual` and not
 `automatic`.
+
+---
+
+## FK-26 · THE ONE ARTEFACT THAT GETS PASTED INTO THE UI WAS CHECKED BY NOTHING
+
+**Cost:** none, caught by reading. Would have been **54 credits** and a shot built on two
+withdrawn pictures.
+
+**What happened.** The operator was queued to run `preflight.py --block "G3 v4"` and then, if
+green, fire it. I went to pre-answer the five outstanding manual items and read the block
+first. Its first line says:
+
+> **`start_image` = `G3/k5-24.png` · `end_image` = `G3/k6-3.png`**
+
+The film's ledger says something else, and has since 31 Jul:
+
+| role | block names | `selections` holds | moved |
+|---|---|---|---|
+| start | `k5-24.png` | `k5-30.png` | at_rev 16, 31 Jul |
+| end | `k6-3.png` | `k6-v16-output.png` | at_rev 29, 31 Jul |
+
+**Both** conditioning inputs of a LIVE 54-credit block are superseded. The block also carries
+a green tick — *"Both conditioning frames are locked and gated. `frames_check.py --pair` reads
+0.18 → 0.43, delta +0.25"* — and that measurement was taken on the dead pair. The number
+vouching for the frames is about two different pictures.
+
+**What every existing guard said about it.** `lint_prompt.py`: 0 errors. `selections.py
+--check`: fine — the selections are current, and that is all it asks. `staleness.py`: nothing
+— it checks whether a *withdrawn* selection is *labelled* withdrawn, and stops there.
+`preflight.py`: would have run all three and reported a block. The film's own `OPEN_ITEMS.md`
+calls this block *"0 errors on the linter, and unfireable"*, and `FILM_REVIEW.md` calls it
+*"stale against the door decision"* — **the operator's documents knew; not one tool did.**
+
+**The gap, stated plainly.** Selections had enforcement. Blocks had enforcement. *Nothing
+joined them.* Both mechanisms were built, both work, and the artefact that actually reaches
+the model — the block, with two filenames in its first line — sat in between them, checked by
+neither. This is not a missing rule inside a tool. It is a **missing edge between two tools
+that each believed the other had it.**
+
+**Fix.** `staleness.py` now reads the body of every **LIVE** block, finds every
+`<role>_image = <path>`, and refuses any that is not the current `selections[<role>].file`.
+Twelve paired cases in `tests/status_test.py`, including the origin's own first line
+reproduced character for character — the regex *is* the guard, and a regex tested only
+against text written to suit it is tested against nothing.
+
+Three of those cases are discrimination controls and they are the ones that keep the rule
+honest: a **SUPERSEDED** block naming the frame it was fired with is accepted, because that
+is the record and not a staleness fault; a **DRAFT** naming another frame is accepted,
+because it has not been fired; and *"pass them in `medias[]` with roles `start_image` and
+`end_image`"* is prose about a role, not a claim about a file, so it is not read as one. The
+origin says that sentence in three places, and a guard that fires on it gets switched off.
+
+**And it says what it did NOT check.** A role a block names and the film does not manage by
+selection is reported `NOT CHECKED — no selection for role(s) …`, by name. FK-13 was the
+finding about tools that reported nothing, truthfully; silence does not get to look like a
+pass twice.
+
+**A second fault, found while declaring the first.** `dual_run.py` held its in-force
+divergences in `{x["tool"]: x for x in ...}` — **keyed on the tool name**. A second entry for
+`staleness.py` would have silently replaced the first, so the acceptance report would have
+shown one cause, stayed quiet about the other, and excused the tool for both. That is
+FK-20/21/24's shape a fourth time: *a name-keyed collection that drops what collides.* Now a
+list per tool, every in-force cause printed, and each dormant entry names its **cause**
+rather than the bare tool name — because a tool can be divergent for one reason and dormant
+for another in the same run, and printing the name in both lists reads as a contradiction.
+
+`in_force` also gained a `facts_key` condition, so FK-26 can state its own cause — *this film
+keeps selections* — instead of riding along inside the prompts-role exemption, which was
+signed for something else entirely. That is the exact thing the file's own `_when` note
+warns about, and without the new condition shape I would have had to do it.
+
+**The transferable rule.** *Guard the artefact that leaves the building.* Every check here
+was on an input to the block or on the ledger behind it. The block is what a person copies
+into a browser at midnight, and it was the only thing nobody validated — because it is
+prose, and prose looks like documentation rather than configuration. **Any document that
+carries a filename a machine will act on is configuration, and it gets a checker.**
+
+**What is not encoded.** Whether the block's *words* are current — `OPEN_ITEMS.md` also
+records that this block never names the door, contradicts itself on whether the new light is
+warm or cool, and still says "stopping" where its own action beat says he never arrives.
+None of that is machine-checkable from here and none of it is claimed to be. This guard
+catches one thing: a **filename** that is no longer the selection. That is the class that
+costs credits silently.

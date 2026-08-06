@@ -131,6 +131,14 @@ def in_force(entry, facts):
     w = entry.get("when")
     if not w:
         return True
+    # A cause stated as a top-level fact rather than a declared file role. The
+    # first `when` shape could only ask about `_files`, so FK-26 -- which
+    # diverges only on a film that KEEPS selections -- had nowhere to state its
+    # cause and would have had to ride along inside the prompts-role exemption
+    # signed for something else. That is the precise thing `_when` warns about.
+    if "facts_key" in w:
+        v = facts.get(w["facts_key"])
+        return bool(v) if w.get("present", True) else not v
     v = (facts.get("_files") or {}).get(w.get("role"))
     if w.get("declared_as") == "list":
         return isinstance(v, list)
@@ -405,8 +413,17 @@ def main():
         facts_name = next((c.name for c in sorted(b_dir.glob("*_facts.json"))), "film_facts.json")
         _f = next((c for c in sorted(b_dir.glob("*_facts.json"))), None)
         _facts = json.loads(_f.read_text(encoding="utf-8")) if _f else {}
-        DIVERGENT = {x["tool"]: x for x in DIVERGENT_ALL if in_force(x, _facts)}
-        _dormant = [x["tool"] for x in DIVERGENT_ALL if not in_force(x, _facts)]
+        # tool -> LIST. One tool can diverge for several independent reasons,
+        # and the first version of this line was a dict comprehension keyed on
+        # the tool name: a second entry silently replaced the first, so the
+        # report would have shown one cause and stayed quiet about the other
+        # while excusing the tool for both. A name-keyed collection that drops
+        # duplicates is the same class of fault as FK-20/21/24.
+        DIVERGENT = {}
+        for x in DIVERGENT_ALL:
+            if in_force(x, _facts):
+                DIVERGENT.setdefault(x["tool"], []).append(x)
+        _dormant = [x for x in DIVERGENT_ALL if not in_force(x, _facts)]
         origin_enc = a.origin_encoding or HOST_ENC
         print(f"  reading origin as {origin_enc!r}, kit as 'utf-8'"
               + ("   (same, so this run cannot show an encoding fault)"
@@ -461,12 +478,13 @@ def main():
         if declared:
             print("  DECLARED DIVERGENCES — the kit deliberately does different work here.")
             print("  These are NOT evidence of a faithful extraction. Read what each one gives up:\n")
-            for tool, d in DIVERGENT.items():
-                print(f"    {tool}")
-                for label, key in (("why", "why"), ("narrows", "narrows")):
-                    for i, line in enumerate(__import__("textwrap").wrap(d.get(key, ""), 70)):
-                        print(f"      {label.upper() + ':' if i == 0 else '     '} {line}"
-                              if i == 0 else f"            {line}")
+            for tool, ds in DIVERGENT.items():
+                for n, d in enumerate(ds, 1):
+                    print(f"    {tool}" + (f"  ({n} of {len(ds)})" if len(ds) > 1 else ""))
+                    for label, key in (("why", "why"), ("narrows", "narrows")):
+                        for i, line in enumerate(__import__("textwrap").wrap(d.get(key, ""), 70)):
+                            print(f"      {label.upper() + ':' if i == 0 else '     '} {line}"
+                                  if i == 0 else f"            {line}")
             print()
         if EXPECTED:
             print("  DECLARED EXPECTED DIFFERENCES — each one signed for, not ignored:")
@@ -478,8 +496,11 @@ def main():
         if _dormant:
             print("  DORMANT DIVERGENCES — declared, but their cause is not present in this")
             print("  film, so these tools were held to exact agreement like any other:")
-            for tool in _dormant:
-                print(f"    {tool}")
+            for x in _dormant:
+                # Name the CAUSE, not just the tool. A tool can be divergent for
+                # one reason and dormant for another at the same time, and
+                # printing the bare name in both lists reads as a contradiction.
+                print(f"    {x['tool']}  —  cause absent: {x.get('when')}")
             print()
         print("  WHAT THIS PROVES: the extraction changed nothing OBSERVABLE THROUGH THESE")
         print(f"  {same} CALLS. Not that the tools are identical — a differential test compares")

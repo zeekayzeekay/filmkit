@@ -29,7 +29,27 @@
         "role": "prompts",
         "declared_as": "list"
       }
+    },
+    {
+      "tool": "staleness.py",
+      "why": "FK-26. The kit's staleness reads the BODY of every LIVE block and refuses one that names a conditioning frame which is not the current selection for that role. The origin's does not — it asks whether a WITHDRAWN selection is labelled withdrawn, and stops there, so the prompt block, which is the artefact that actually gets pasted into the UI with two filenames in its first line, was checked by nothing. Measured on the origin film on 6 Aug: a LIVE 54-credit block still naming a start_image and an end_image that had both been superseded on 31 Jul, quoting a frames_check --pair reading taken on the dead pair, at 0 linter errors.",
+      "narrows": "Nothing at all on a film that keeps no selections — the check is silent and the comparison stays exact. On a film that keeps them, staleness stops being evidence that the extraction changed nothing and becomes evidence of a check the origin never had. The origin's output is the smaller of the two, and its silence is the finding rather than the baseline.",
+      "when": {
+        "facts_key": "selections",
+        "present": true
+      }
+    },
+    {
+      "tool": "preflight.py",
+      "why": "FK-26 again: preflight RUNS staleness and prints its report, so it inherits the frame-reference check. Nothing in preflight itself changed. Listed as its own entry rather than folded into the prompts-role one above, because it is a separate cause and an exemption signed for one reason must never quietly cover another.",
+      "narrows": "As staleness above, multiplied by preflight being the largest tool in the kit. The extraction evidence for this film remains the adoption run — 43 invocations, all agreeing. This run answers a different question: what the new check changed."
+      ,
+      "when": {
+        "facts_key": "selections",
+        "present": true
+      }
     }
   ],
-  "_when": "A divergence is in force ONLY while its stated cause is. `when` names the condition -- here, that the film declared this role as several files. Without it the entry would excuse that tool from the comparison forever, and a real change would land inside an exemption somebody signed for a different reason."
+  "_when": "A divergence is in force ONLY while its stated cause is. `when` names the condition -- either a file role declared as several files, or a top-level facts key being present. Without it the entry would excuse that tool from the comparison forever, and a real change would land inside an exemption somebody signed for a different reason.",
+  "_several_per_tool": "One tool may appear several times with different `when` conditions. dual_run groups them by tool and prints every one that is in force, and names the CAUSE of each dormant entry rather than the bare tool name -- a tool can be divergent for one reason and dormant for another in the same run."
 }

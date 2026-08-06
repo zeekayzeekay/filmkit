@@ -154,6 +154,94 @@ def blocks():
     return out
 
 
+def live_bodies():
+    """(file, heading, body) for every block whose status is LIVE.
+
+    `blocks()` deliberately returns no body — every check it feeds reads the
+    heading and the status comment and nothing else. This one has to read the
+    block, because the thing it checks is written INSIDE the block.
+    """
+    out = []
+    for f in PROMPTS:
+        if not f.exists():
+            continue
+        lines = f.read_text(encoding="utf-8").splitlines()
+        file_status = None
+        for l in lines:
+            if not l.strip():
+                continue
+            if re.match(r"^#{1,3} ", l):
+                break
+            fm = re.match(r"<!--\s*status:\s*(\w+)(.*?)-->", l.strip())
+            if fm:
+                file_status = fm.group(1)
+                break
+        cur_h, cur_s, buf = None, file_status, []
+        for i, l in enumerate(lines):
+            m = re.match(r"^#{1,3} (.+?)\s*$", l)
+            if not m:
+                buf.append(l)
+                continue
+            if cur_h is not None and cur_s == "LIVE":
+                out.append((f.name, cur_h, "\n".join(buf)))
+            cur_h, buf = m.group(1), []
+            nxt = lines[i + 1] if i + 1 < len(lines) else ""
+            s = re.match(r"<!--\s*status:\s*(\w+)(.*?)-->", nxt.strip())
+            cur_s = s.group(1) if s else file_status
+        if cur_h is not None and cur_s == "LIVE":
+            out.append((f.name, cur_h, "\n".join(buf)))
+    return out
+
+
+# `start_image` = `G3/k5-24.png`  ·  end_image: shots/end.png  ·  **`end_image`
+# = `G3/k6-3.png`**. Markdown emphasis and backticks sit anywhere in this, so
+# the path stops at the first character that cannot be in one. It requires an
+# extension: a block that says "roles `start_image` / `end_image`" in prose is
+# naming the ROLE, not a picture, and must not be read as a claim about a file.
+FRAME_REF = re.compile(
+    r"`?\b([A-Za-z0-9_]+)_image`?\s*[=:]\s*[`*\s]*"
+    r"([^\s`,;·|)*]+\.(?:png|jpe?g|webp))", re.I)
+
+
+def _norm(p):
+    return str(p).replace("\\", "/").lstrip("./")
+
+
+def frame_refs(facts):
+    """Every conditioning frame a LIVE block names, judged against the selection.
+
+    Returns (violations, checked, skipped). `skipped` is the important return
+    value and it is why this does not just return violations: a role a block
+    names and the film does not manage by selection is UNCHECKED, and FK-13 is
+    the finding about a tool that reported nothing, truthfully, and let silence
+    read as a pass.
+    """
+    sel = (facts.get("selections") or {})
+    violations, checked, skipped = [], [], []
+    for fn, h, body in live_bodies():
+        for m in FRAME_REF.finditer(body):
+            role, named = m.group(1).lower(), _norm(m.group(2))
+            s = sel.get(role)
+            if not isinstance(s, dict) or not s.get("file"):
+                skipped.append((fn, h, role, named))
+                continue
+            cur = _norm(s["file"])
+            checked.append((fn, h, role, named))
+            if named == cur:
+                continue
+            when = " · ".join(x for x in (
+                f"selected {s['selected_on']}" if s.get("selected_on") else "",
+                f"at_rev {s['at_rev']}" if s.get("at_rev") is not None else "",
+            ) if x)
+            violations.append(
+                f"{fn}: LIVE block {h[:52]!r} names {role}_image = {named}, but "
+                f"selections.{role} is {cur}" + (f" ({when})" if when else "") + ". "
+                f"The block is what gets pasted into the UI, so this is the frame that "
+                f"would actually be attached — and every gate reading quoted in the block "
+                f"was measured on the other picture.")
+    return violations, checked, skipped
+
+
 def main():
     bad, blks = [], blocks()
 
@@ -288,6 +376,24 @@ def main():
                     bad.append(f"{tag} records a divergence that cites no side-by-side — "
                                "run compare_asset.py and put its proof path in the entry")
 
+    # ---- a LIVE block may not name a frame that is not the selection ------
+    # FK-26. Selections had enforcement and blocks had enforcement, and nothing
+    # joined them. `selections.py --check` asks whether a selection is stale
+    # against the fact revs under it; the loop above asks whether a WITHDRAWN
+    # selection is labelled as such. Neither reads the prompt block, which is
+    # the artefact that actually gets pasted into the UI with two filenames in
+    # its first line.
+    #
+    # Measured on the origin film, 6 Aug: selections.start had moved to
+    # `k5-30.png` at rev 16 and selections.end to `k6-v16-output.png` at rev 29,
+    # both on 31 Jul. The LIVE 12-second block still named `k5-24` and `k6-3`,
+    # and still quoted a `frames_check --pair` reading of 0.18 -> 0.43 taken on
+    # that dead pair. The linter returned 0 errors. It is a 54-credit generation
+    # whose two conditioning inputs are both withdrawn and whose vouching number
+    # is about two different pictures.
+    _fr_bad, _fr_ok, _fr_skip = frame_refs(_facts_doc)
+    bad.extend(_fr_bad)
+
     if "--list" in sys.argv:
         print()
         # Group by ledger only when there is more than one. With a single file
@@ -313,6 +419,18 @@ def main():
     n_files = len({fn for fn, _, _, _, _ in blks})
     where = f" in {n_files} ledgers" if n_files > 1 else ""
     print(f"\n  {len(blks)} headings{where} · " + " · ".join(f"{n} {k}" for k, n in sorted(c.items())))
+
+    # Say what was checked, and say what was NOT. A frame reference whose role
+    # the film does not manage by selection is unchecked, and FK-13 was the
+    # finding about three tools that reported nothing, truthfully, on a film
+    # that had plenty to report. Silence is not a pass, so it does not get to
+    # look like one.
+    if _fr_ok or _fr_skip:
+        line = f"  {len(_fr_ok)} conditioning frame ref(s) checked against selections"
+        if _fr_skip:
+            line += (f" · {len(_fr_skip)} NOT CHECKED — no selection for role(s) "
+                     + ", ".join(sorted({r for _, _, r, _ in _fr_skip})))
+        print(line)
 
     if bad:
         print(f"\n  {len(bad)} STALENESS VIOLATION(S):")
