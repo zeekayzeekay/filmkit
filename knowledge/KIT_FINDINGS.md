@@ -2260,3 +2260,71 @@ nothing else.
 identifies the subject. There will not be one. The proof image answers it, a person reads the
 proof, and every number here is a summary that person is reading *alongside* the picture — not
 instead of it.
+
+---
+
+## FK-36 · THE SHARES ARE A MIXTURE, AND I MADE THEM THE HEADLINE TWICE
+
+**Cost:** none. Caught by measuring the second proof instead of reasoning from the first.
+
+**What happened.** FK-33 split the counted pixels into warm and cool populations, and I read
+the result out to the operator as, in Runbooks 33 and 34:
+
+> *"warm share falls, cool share rises — 45%→25%, 55%→75%. The warm does not fade, it
+> intensifies."*
+
+The second half is sound. **The first half is confounded and I stated it as a headline
+twice.**
+
+**What a share actually answers.** *"What fraction of the counted pixels IN THIS BOX lean
+warm."* That depends on which of the subject's surfaces the box holds. **Hair takes a warm
+rim; a wool shoulder takes a cool one.** In the origin film's start frame the man fills the
+box — head, face, and a large area of jacket. In the end frame he is roughly three times
+smaller, twelve feet from the lens, and the box holds mostly head with very little fabric.
+
+So the two shares are **answers to two different questions**, and the difference between them
+is partly a fact about how much jacket was in view.
+
+**Measured, on the operator's own two proof overlays:**
+
+| | start box | end box |
+|---|---|---|
+| warm / cool, my count off the overlay | 44% / 56% | — |
+| warm / cool, the tool's own figure | 45% / 55% | 25% / 75% |
+| **restricted to the columns holding the man** | ~49% warm | ~65% warm |
+
+The overlay count reproduces the tool to within a point, which is what makes the third row
+worth anything. **And the third row runs the OTHER WAY from the first two.** Read as a
+property of the light, the shares say the warm is losing; read on the man alone, the warm is
+gaining. Neither is the light. Both are mixtures.
+
+**What IS comparable, and it was in the same output the whole time:** the two **means**.
+
+| | start | end |
+|---|---|---|
+| warm population | **+20.0** | **+25.1** |
+| cool population | **−6.0** | **−17.1** |
+
+Those are intensities — *how strong each light is where it lands*, not how much of him it
+landed on. Both intensify. That statement survives the size difference and the mixture, and
+it is the one the film's prompt gets written from.
+
+**Fix.** The report now prints the two boxes' pixel dimensions and the ratio between their
+areas, followed by the caption stating that the shares are a mixture, that the mixture depends
+on which surfaces the box holds, and that **the two means are the comparable pair.**
+
+**Why this is a different fault from FK-30 and FK-35, which look the same.** Those were
+captions that overclaimed for numbers I had just invented. This is a number that is correct,
+correctly captioned as far as it went, and **wrong to compare across two images** — a fault
+that lives in the comparison rather than in either measurement. It has no wrong sentence in
+the code to point at. It had a wrong sentence in two runbooks instead.
+
+**The transferable rule.** *A ratio is only comparable between two populations sampled the
+same way.* Every share, percentage and rate carries an invisible denominator, and the
+denominator here was "how much of a man is in the rectangle" — which changed by a factor of
+three between the two frames, for reasons that are about the shot and not the light. **Before
+comparing two ratios, say out loud what each is a fraction OF.**
+
+**What is still not encoded:** nothing checks that two `--subject` boxes hold comparable parts
+of the same subject. Nothing can. The box sizes are printed so the question is at least
+visible, and the answer is in the two proofs.

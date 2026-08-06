@@ -269,7 +269,8 @@ def rim_chroma(arr, box, proof_name=None):
             return float("nan")
         c = np.where(m)[1]
         return 100.0 * float(((c < bw / 3) | (c > 2 * bw / 3)).mean())
-    res = dict(area=100*float(lit.mean()), rb=float(rb_px[lit].mean()),
+    res = dict(box_px=(int(x1 - x0), int(y1 - y0)),
+               area=100*float(lit.mean()), rb=float(rb_px[lit].mean()),
                lum=float(L[lit].mean()),
                span_x=100*float((lit.any(axis=0)).mean()),
                span_y=100*float((lit.any(axis=1)).mean()),
@@ -725,6 +726,31 @@ def main():
         print(f"\n        Two lights on two parts of one subject are not a contradiction and")
         print(f"        their mean is not a description. If both shares are large, the number")
         print(f"        on the line above is between them and belongs to neither.")
+        # FK-36. THE SHARES ARE A MIXTURE, AND THE MIXTURE IS NOT THE LIGHT.
+        # A share answers "what fraction of the counted pixels in THIS box lean
+        # warm", and that depends on which of the subject's surfaces are in the
+        # box. Hair takes a warm rim; a wool shoulder takes a cool one. A subject
+        # three times smaller in one frame contributes a different mixture of
+        # hair to fabric, so the two shares are answers to two questions.
+        #
+        # The MEANS are comparable in a way the shares are not: they are the
+        # intensity of each light where it lands, not how much of him it landed
+        # on. I published "warm share falls, cool share rises" as the headline
+        # reading twice before measuring this.
+        _sb, _eb = sc.get("box_px"), ec.get("box_px")
+        if _sb and _eb:
+            _sa, _ea = _sb[0] * _sb[1], _eb[0] * _eb[1]
+            _r = max(_sa, _ea) / max(min(_sa, _ea), 1)
+            print(f"\n        box size          {_sb[0]}x{_sb[1]} px  →  {_eb[0]}x{_eb[1]} px"
+                  f"   ({_r:.1f}x difference in area)")
+        print(f"        THE SHARES ABOVE ARE A MIXTURE, not a light. They answer 'what "
+              f"fraction of\n        the counted pixels in THIS box lean warm' — and that "
+              f"depends on which of\n        the subject's surfaces the box holds. Hair takes "
+              f"a warm rim; a wool\n        shoulder takes a cool one. If the subject's size "
+              f"in frame differs between\n        the two images, the two shares are answers "
+              f"to two different questions.\n        THE TWO MEANS ARE THE COMPARABLE PAIR: "
+              f"they are how strong each light is\n        where it lands, not how much of him "
+              f"it landed on.")
         print(f"        rim brightness       {sc['lum']:6.1f}  →  {ec['lum']:6.1f}"
               f"    (must rise: he walks into the brighter end of the room)")
         print(f"        rim area             {sc['area']:6.2f}%  →  {ec['area']:6.2f}%")
