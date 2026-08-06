@@ -435,5 +435,93 @@ def main():
     return 1
 
 
+
+
+# --------------------------------------------------------------------------
+# NO TOOL MAY ACCEPT AN OPTION IT NEVER READS.
+#
+# FK-27. `frames_check.py` declared `--expect warmer|cooler`, printed it in its
+# own usage block, and read it NOWHERE. The pair gate is hard-coded to a
+# warm->cool swing, derived under F-28 from the room's actual measurements. So
+# the operator ran the documented command with `--expect warmer`, the tool
+# measured a swing of -24.3 against a threshold requiring <= -15.0, and printed
+# PASS. He asked for one direction and was certified green on its opposite,
+# with no line of output saying which one had been tested.
+#
+# This is the FK-20/21/24 family in its purest form: a NAME accepted and never
+# resolved to anything. The earlier three were tool names and server names. This
+# one is a parameter, which is worse, because a parameter carries the caller's
+# intent -- and a tool that silently discards intent cannot be argued with. Its
+# green is indistinguishable from a green that answers the question.
+#
+# The rule is deliberately blunt: declared and unread is a fault, always. A flag
+# that is genuinely not needed yet should not be offered yet.
+# --------------------------------------------------------------------------
+import ast as _ast
+
+
+def _dests(tree):
+    """(dest, option-string) for every OPTIONAL argument an argparse call adds.
+
+    Positionals are excluded: their dest is the name, and code that uses them
+    reads it the same way, so the check would be identical -- but a positional
+    cannot be silently ignored by a caller who typed something meaningful, which
+    is the fault this is about.
+    """
+    out = []
+    for node in _ast.walk(tree):
+        if not (isinstance(node, _ast.Call) and isinstance(node.func, _ast.Attribute)
+                and node.func.attr == "add_argument"):
+            continue
+        opts = [a.value for a in node.args
+                if isinstance(a, _ast.Constant) and isinstance(a.value, str)]
+        if not opts or not any(o.startswith("-") for o in opts):
+            continue                    # positional
+        dest = None
+        for kw in node.keywords:
+            if kw.arg == "dest" and isinstance(kw.value, _ast.Constant):
+                dest = kw.value.value
+            if kw.arg == "help" and isinstance(kw.value, _ast.Constant) \
+                    and "IGNORED" in str(kw.value.value):
+                dest = "__declared_dead__"
+        if dest is None:
+            longest = max((o for o in opts if o.startswith("--")), key=len, default=None)
+            if longest is None:
+                continue                # short-only flag; dest is unguessable here
+            dest = longest[2:].replace("-", "_")
+        out.append((dest, " / ".join(opts)))
+    return out
+
+
+for _f in scripts():
+    _src = _f.read_text(encoding="utf-8")
+    if "add_argument" not in _src:
+        continue
+    try:
+        _tree = _ast.parse(_src)
+    except SyntaxError:
+        continue
+    # A file that reflects over its namespace reads every dest by construction,
+    # and this check cannot see that. Say so by skipping rather than by guessing.
+    if re.search(r"\bvars\(\s*[A-Za-z_]\w*\s*\)|\bgetattr\(", _src):
+        continue
+    # Every attribute NAME read anywhere in the file, plus every plain name.
+    # Deliberately not scoped to the namespace object: `a.expect` and
+    # `args.expect` and a helper taking `expect=` all count as reading it. The
+    # check is for a dest that appears NOWHERE, which is unambiguous.
+    _read = {n.attr for n in _ast.walk(_tree) if isinstance(n, _ast.Attribute)}
+    _read |= {n.id for n in _ast.walk(_tree) if isinstance(n, _ast.Name)}
+    _read |= {kw.arg for n in _ast.walk(_tree)
+              if isinstance(n, _ast.Call) for kw in n.keywords if kw.arg}
+    for _dest, _opt in _dests(_tree):
+        if _dest == "__declared_dead__":
+            continue
+        if _dest not in _read:
+            fail("declared-unread-option", f"{_f.parent.name}/{_f.name}",
+                 f"accepts {_opt} and never reads {_dest!r}. A caller who passes it gets "
+                 f"whatever the tool was going to do anyway, and no line of output says so. "
+                 f"FK-27: --expect warmer returned PASS on a gate that requires cooler.")
+
+
 if __name__ == "__main__":
     sys.exit(main())

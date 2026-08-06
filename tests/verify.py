@@ -149,6 +149,8 @@ def main():
             cwd=tmp, name="tools survive a stdout that cannot encode them")
         run([sys.executable, str(kit / "tests" / "status_test.py")],
             cwd=tmp, name="each block status fires on its own text only")
+        run([sys.executable, str(kit / "tools" / "frames_check.py"), "--selftest"],
+            cwd=film, name="a gate flag agrees or refuses, never ignored")
 
         if real:
             print(f"\n  A REAL FILM — {real}")

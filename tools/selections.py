@@ -62,6 +62,22 @@ def main():
     ap.add_argument("--note", default="")
     a = ap.parse_args()
 
+    # FK-27. `--check` was declared and read NOWHERE. It appeared to work only
+    # because the report is also what a bare invocation does, so the flag named
+    # in the usage block — and passed by preflight — controlled nothing, and
+    # `--set ROLE FILE --check` quietly wrote the selection and skipped the
+    # check the operator had just asked for. A flag whose meaning depends on no
+    # other flag being present is not a flag.
+    #
+    # Bare invocation still does exactly what it always did, byte for byte, so
+    # every existing caller is unaffected. What changes is that a command line
+    # asking for two different things is now refused instead of half-obeyed.
+    if a.check and (a.set or a.confirm or a.withdraw):
+        print("\n  --check reports; --set, --confirm and --withdraw write. This command line "
+              "asks\n  for both, and the write would have happened while the check you typed "
+              "was\n  discarded. Run them separately, write first.\n")
+        return 2
+
     d = load()
     sel = d.setdefault("selections", {})
 

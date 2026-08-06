@@ -56,7 +56,12 @@ TOOLS = [
     ("verify_asset.py", ["--selftest"]),
     ("compare_asset.py", ["--audit"]),
     ("selections.py", ["--check"]),
-    ("selections.py", ["--list"]),
+    # `selections.py --list` was here and this tool HAS NO --list. Both sides
+    # printed the same argparse usage error and exited 2, so the comparison
+    # agreed — about nothing. It was one of the 43 invocations quoted as the
+    # acceptance evidence for this film. An invocation that cannot fail is not
+    # coverage, and the count is now 42 honest ones. See the both-sides-usage-
+    # error check below, which makes this impossible to reintroduce quietly.
     ("staleness.py", []),
     ("staleness.py", ["--list"]),
     ("checklist.py", []),
@@ -449,7 +454,23 @@ def main():
                 if pairs and all(account_for(x, y, facts_name) for x, y in pairs):
                     accounted = len(pairs)
                     lb = la
-            if la == lb and rc_a == rc_b:
+            # BOTH SIDES REFUSING TO RUN IS NOT AGREEMENT.
+            #
+            # FK-27. `selections.py --list` names a flag that tool does not
+            # have. argparse printed the same usage error on both sides and
+            # exited 2 on both sides, so this read as `ok ... identical` and
+            # was counted among the invocations quoted as acceptance evidence.
+            # Two processes that never reached their own code agree about
+            # nothing, and the only thing this gate exists to measure is what
+            # the code does. An invocation that cannot fail must not be able to
+            # pass either.
+            _usage = ("usage:" in "\n".join(la[:3]).lower()
+                      and rc_a == 2 and rc_b == 2)
+            if _usage:
+                diff += 1
+                print(f"  !! {label:30s} NEITHER SIDE RAN — argparse usage error, exit 2 "
+                      f"on both. This invocation proves nothing; fix or remove it.")
+            elif la == lb and rc_a == rc_b:
                 same += 1
                 note = f", {accounted} expected" if accounted else ""
                 print(f"  ok {label:30s} identical ({len(la)} lines, exit {rc_a}{note})")

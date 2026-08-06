@@ -154,6 +154,20 @@ HEAD_BOX = (0.20, 0.02, 0.55, 0.50)   # generous; catches a person, does not seg
 
 RIM_SWING_MIN = 15.0     # k5-30 -> k6-5 is -23.5. Two start frames differ by 4.1.
 
+# FK-27. The direction is NOT the caller's to choose, and `--expect` used to
+# accept it as though it were — then read it nowhere. The operator ran the
+# documented command with `--expect warmer`, this gate measured a swing of
+# -24.3 against a threshold requiring <= -15.0, and printed PASS. He asked for
+# one direction and was certified green on its opposite, with no line of output
+# naming which one had been tested.
+#
+# The direction is a MEASURED property of the room (the table above, and F-28):
+# there is no golden light at the window end, so a warm-swing gate here is not
+# merely wrong, it is unsatisfiable. The flag therefore stays — it documents the
+# assumption and gives a caller somewhere to disagree — but it can only AGREE or
+# REFUSE. It can never redirect, and it can never be silently discarded.
+GATE_DIRECTION = "cooler"
+
 
 def rim_chroma(arr, box):
     """Lit edges on a dark surround inside `box`, and what colour they are."""
@@ -262,14 +276,122 @@ def video_curve(path):
     return a
 
 
+def selftest():
+    """FK-27 — `--expect` may agree or refuse. It may never be ignored.
+
+    The fault this replaces: the flag was declared, printed in the usage block,
+    passed by the operator as `warmer`, and read nowhere. The gate tested a COOL
+    swing, measured -24.3 against a threshold of <= -15.0, and printed PASS.
+
+    Case 3 is the one that matters and it is the discrimination control: the
+    refusal must arrive on paths that DO NOT EXIST. A tool that opens the images
+    first and argues afterwards has already put numbers on the screen answering
+    a question nobody asked, and the numbers are the part people remember.
+    """
+    import json, subprocess, tempfile
+    ok = True
+    print("\n  FK-27 — --expect agrees or refuses; it is never discarded\n")
+    wrong = "warmer" if GATE_DIRECTION == "cooler" else "cooler"
+    with tempfile.TemporaryDirectory() as d:
+        p = pathlib.Path(d)
+        # A film, because `_project` refuses to resolve without one — and the
+        # FIRST version of this selftest ran without it, so every subprocess
+        # died at import with "no film found", four cases failed for a reason
+        # that had nothing to do with the rule, and the fifth PASSED because its
+        # assertion was "REFUSED not in output" and a crash contains no such
+        # word. A negative assertion passes on a process that never started.
+        (p / "film_facts.json").write_text(json.dumps({
+            "_fact_rev": 1, "assets": {}, "selections": {},
+            "_files": {"prompts": "P.md", "findings": "F.md", "script": "S.md",
+                       "selftest": "G.md", "checklist": "C.md", "run_record": "R.md",
+                       "workflow": "W.md", "live_docs": [], "regression_globs": []}}),
+            encoding="utf-8")
+        # two frames that differ, so the runs that get PAST the direction guard
+        # have something real to measure and cannot pass by reading nothing
+        # The lit edges must land inside HEAD_BOX and there must be enough of
+        # them: rim_chroma returns None under 200 lit pixels, and a rim is only
+        # "lit" where it exceeds its own 21px neighbourhood by 8 — so one broad
+        # stripe raises its own surround and mostly cancels itself. Several thin
+        # ones do not. A first attempt at 8px x 50 produced 50 lit pixels and
+        # None; these produce ~1100.
+        for name, rim in (("a.png", (215, 165, 110)), ("b.png", (110, 160, 220))):
+            arr = np.full((200, 200, 3), 18, dtype=np.uint8)
+            for i in range(3):
+                arr[6:101, 60 + i * 10:64 + i * 10] = rim
+            Image.fromarray(arr).save(p / name)
+
+        def run(args):
+            r = subprocess.run([sys.executable, str(pathlib.Path(__file__).resolve())] + args,
+                               capture_output=True, text=True, encoding="utf-8",
+                               errors="backslashreplace", cwd=str(p), timeout=180)
+            return r.stdout + r.stderr, r.returncode
+
+        cases = [
+            (f"--expect {wrong} is REFUSED, not obeyed and not ignored",
+             [str(p / "a.png"), str(p / "b.png"), "--pair", "--expect", wrong],
+             lambda o, rc: "REFUSED" in o and rc == 2),
+            (f"--expect {GATE_DIRECTION} agrees and the run proceeds",
+             [str(p / "a.png"), str(p / "b.png"), "--pair", "--expect", GATE_DIRECTION],
+             lambda o, rc: "REFUSED" not in o and "rim colour on him" in o),
+            ("the refusal arrives BEFORE the images are opened",
+             [str(p / "nope.png"), str(p / "gone.png"), "--pair", "--expect", wrong],
+             lambda o, rc: "REFUSED" in o and rc == 2 and "rim colour on him" not in o),
+            ("default auto runs, and says which direction it gated",
+             [str(p / "a.png"), str(p / "b.png"), "--pair"],
+             lambda o, rc: f"gating a {GATE_DIRECTION.upper()} swing" in o),
+            # Without this one the whole set would pass on a tool that refused
+            # everything, which is the cheapest way to look strict.
+            ("...and a non-pair run is not refused for a direction it never gates",
+             [str(p / "a.png")],
+             lambda o, rc: "REFUSED" not in o),
+        ]
+        for name, args, want in cases:
+            out, rc = run(args)
+            good = "Traceback" not in out and want(out, rc)
+            ok &= good
+            print(f"  {'ok ' if good else '!! '}{name}")
+            if not good:
+                for line in out.strip().splitlines()[-4:]:
+                    print(f"       {line[:100]}")
+
+    print()
+    print("  \033[92mNo faults of any known class.\033[0m" if ok else "  \033[91mFAILED.\033[0m")
+    print("  NOT tested: whether GATE_DIRECTION is the RIGHT direction for your room. That")
+    print("  is a measurement, it is recorded under F-28, and it is not a command-line flag.\n")
+    return 0 if ok else 1
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("images", nargs="+")
+    ap.add_argument("images", nargs="*")
+    ap.add_argument("--selftest", action="store_true",
+                    help="FK-27: prove --expect can only agree or refuse, never be ignored")
     ap.add_argument("--role", choices=["start", "end"])
     ap.add_argument("--pair", action="store_true")
-    ap.add_argument("--expect", choices=["warmer", "cooler"], default="warmer")
+    ap.add_argument("--expect", choices=["warmer", "cooler", "auto"], default="auto",
+                    help="the direction you believe the rim colour moves. Default auto = "
+                         "the direction this gate was derived for. Naming the other one is "
+                         "refused, not silently ignored.")
     ap.add_argument("--video", action="store_true")
     a = ap.parse_args()
+
+    if a.selftest:
+        return selftest()
+    if not a.images:
+        ap.error("no images given")
+
+    # Refuse BEFORE measuring. A tool that measures first and then argues has
+    # already spent the operator's attention on numbers answering a question he
+    # did not ask, and the numbers are the part people remember.
+    if a.expect not in ("auto", GATE_DIRECTION):
+        print(f"\n  REFUSED — you passed --expect {a.expect}, and the pair gate here tests a "
+              f"{GATE_DIRECTION.upper()} swing in the rim's colour.")
+        print(f"  That direction is not a setting. It was measured off this room's own frames "
+              f"and\n  recorded under F-28: there is no golden light at the window end, so a "
+              f"{a.expect}\n  gate is not merely the wrong test, it is one nothing could pass.")
+        print("\n  If you believe the light really does run the other way, that is a finding "
+              "about\n  the room and it changes GATE_DIRECTION. It does not change this run.\n")
+        return 2
 
     if a.video:
         video_curve(a.images[0])
@@ -311,7 +433,24 @@ def main():
         # window end of this room, so the old delta could only ever be negative.
         sc = rim_chroma(np.asarray(Image.open(a.images[0]).convert("RGB")), HEAD_BOX)
         ec = rim_chroma(np.asarray(Image.open(a.images[1]).convert("RGB")), HEAD_BOX)
-        print(f"\n  PAIR — rim colour on him   start R-B {sc['rb']:+6.1f}  →  end "
+        # Name the direction in words, not only as the sign of a threshold. The
+        # operator who typed `--expect warmer` read "(need <= -15.0)" and PASS
+        # in the same block and had no reason to connect them.
+        print(f"\n  PAIR — gating a {GATE_DIRECTION.upper()} swing"
+              + (f", as you asked" if a.expect == GATE_DIRECTION else " (F-28; --expect auto)"))
+        # The --role path has always tested this and the --pair path never did,
+        # so a pair with no detectable lit edge died with a TypeError instead of
+        # saying what was wrong. A traceback is not a finding: it tells the
+        # operator the tool is broken when what happened is that his frame has
+        # no rim in the head box, which is itself the answer.
+        if sc is None or ec is None:
+            which = ", ".join(n for n, v in (("start", sc), ("end", ec)) if v is None)
+            print(f"\n  \033[91mFAIL\033[0m\n    ! no lit edge found in the head box of the "
+                  f"{which} frame. Either there is nobody in it, or the light on him is flat "
+                  f"enough that this gate has nothing to measure — open the rim proof and see "
+                  f"which.")
+            return 1
+        print(f"        rim colour on him    start R-B {sc['rb']:+6.1f}  →  end "
               f"{ec['rb']:+6.1f}    swing {ec['rb']-sc['rb']:+6.1f}   (need <= {-RIM_SWING_MIN:+.1f})")
         print(f"        rim brightness       {sc['lum']:6.1f}  →  {ec['lum']:6.1f}"
               f"    (must rise: he walks into the brighter end of the room)")
