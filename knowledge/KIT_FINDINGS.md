@@ -2328,3 +2328,52 @@ comparing two ratios, say out loud what each is a fraction OF.**
 **What is still not encoded:** nothing checks that two `--subject` boxes hold comparable parts
 of the same subject. Nothing can. The box sizes are printed so the question is at least
 visible, and the answer is in the two proofs.
+
+---
+
+## FK-37 · THE ONE TOOL WITH A DIFFERENT CALLING CONVENTION GOT CALLED THE WAY THE OTHERS ARE
+
+**Cost:** none. One traceback on the operator's screen, from a documented command.
+
+**What happened.** Runbook 35 step 3 said:
+
+```
+python C:\ai-video\filmkit\tools\patch_block.py --show "G3 v4"
+```
+
+> `FileNotFoundError: [Errno 2] No such file or directory: 'G3 v4'`
+
+`patch_block.py` is the **only** tool in this kit that takes a positional FILE. Every other one
+takes `--block "NAME"` and resolves the film itself — `lint_prompt --block`, `preflight
+--block`. So `--show` is a bare flag here, argparse bound `"G3 v4"` to `file`, and the tool
+tried to open a block title as a path.
+
+**I wrote the wrong command, and I wrote it because every neighbouring line in the same runbook
+has the other shape.** That is not carelessness about one tool; it is what a unique interface
+costs, paid by whoever types the tenth command in a list of eleven.
+
+**And the tool's answer was a traceback.** `verify.py` is built on the rule that *a traceback
+is not a phase result* — FK-04's whole point — and every other tool in the kit refuses with a
+sentence. This one died with a Python stack on a path that was never a path.
+
+**Fix, and it is two things.**
+
+1. **`FILE` is optional.** Without it the block is looked up across **every ledger the film
+   declares in its `prompts` role** — plural, as `staleness` already reads it. A block sitting
+   in one of four ledgers was previously unreachable without naming the file by hand.
+   Ambiguity across ledgers is **refused** by name, which is the rule this tool already applied
+   within a single file, now applied across the set. That matters here more than usual: this
+   is the tool whose docstring records two edits landing in historical blocks.
+
+2. **Every read refuses readably.** Missing file, directory, permission, undecodable bytes —
+   each prints a sentence, and the missing-file case prints the correct invocation, because
+   the person seeing it has just typed the wrong one.
+
+**The transferable rule.** *An interface that is unique among its siblings will be called the
+way the siblings are called.* Consistency is not a courtesy — it is the thing that makes a
+command correct when it is typed from memory at the end of a long list. **Where one tool
+differs, either make it the same or make the difference impossible to get wrong.** Here, both:
+the calling convention now matches, and the old form still works.
+
+**What is not encoded:** whether the block a name matches is the one you meant. Ambiguity is
+refused, absence is refused, and a single match is trusted — as it always was.

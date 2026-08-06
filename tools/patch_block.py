@@ -21,10 +21,22 @@ THE RULE
     tool refuse if the target is ambiguous or absent inside it.
 
 Usage
-  python3 patch_block.py FILE --block "K5-start v5" --old "..." --new "..."
-  python3 patch_block.py FILE --block "K5-start v5" --show          # print it
-  python3 patch_block.py FILE --list                                # block names
-  python3 patch_block.py FILE --block "K5-start v5" --export OUT.txt
+  python3 patch_block.py --block "K5-start v5" --show          # print it
+  python3 patch_block.py --block "K5-start v5" --old "..." --new "..."
+  python3 patch_block.py --list                                # block names
+  python3 patch_block.py --block "K5-start v5" --export OUT.txt
+
+  FILE is OPTIONAL and comes first if you give it. Without it the block is
+  looked up across every ledger the film declares in its `prompts` role.
+
+FK-37 — WHY THE FILE IS OPTIONAL NOW
+  Every other tool in this kit takes `--block "NAME"` and resolves the film
+  itself. This one alone required a positional FILE, and the difference is
+  invisible in a runbook full of the other form: the documented command was
+  written as `patch_block.py --show "G3 v4"`, argparse bound "G3 v4" to `file`,
+  and the tool died with a FileNotFoundError traceback on a path that was never
+  a path. An interface that is unique among its siblings will be called the way
+  the siblings are called.
 """
 import argparse, hashlib, pathlib, re, sys
 
@@ -55,7 +67,7 @@ def fence_span(lines, title_pred):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("file")
+    ap.add_argument("file", nargs="?")
     ap.add_argument("--block")
     ap.add_argument("--old")
     ap.add_argument("--new")
@@ -64,20 +76,70 @@ def main():
     ap.add_argument("--export")
     a = ap.parse_args()
 
-    p = pathlib.Path(a.file)
-    lines = p.read_text(encoding="utf-8").split("\n")
+    if not a.block and not a.list:
+        ap.error("--block is required (or --list)")
+
+    def _read(path):
+        """Refuse readably. A traceback is not a phase result -- the same rule
+        verify.py is built on, and this file was the one place that broke it."""
+        try:
+            return path.read_text(encoding="utf-8").split("\n")
+        except FileNotFoundError:
+            print(f"\n  ! no such file: {str(path)!r}")
+            print("    FILE is optional and comes FIRST. To name a block, use --block:")
+            print(f'      python3 patch_block.py --block "{a.block or "NAME"}" --show\n')
+            return None
+        except (IsADirectoryError, PermissionError, UnicodeDecodeError) as ex:
+            print(f"\n  ! cannot read {str(path)!r}: {type(ex).__name__}\n")
+            return None
+
+    if a.file:
+        candidates = [pathlib.Path(a.file)]
+    else:
+        # Every ledger the film declares. The `prompts` role is plural on films
+        # that keep their history in several files, and a block named in one of
+        # four was previously unreachable without naming the file by hand.
+        import _project as P  # FK-34: lazily, so `patch_block.py FILE ...` needs no film
+        candidates = [f for f in P.file_list("prompts") if f.exists()]
+        if not candidates:
+            print("  the film declares no prompt ledger that exists")
+            return 1
 
     if a.list:
-        for _, _, t in fence_span(lines, lambda t: True):
-            print("  " + t[:90])
+        for c in candidates:
+            if len(candidates) > 1:
+                print(f"\n  --- {c.name}")
+            ls = _read(c)
+            if ls is None:
+                return 1
+            for _, _, t in fence_span(ls, lambda t: True):
+                print("  " + t[:90])
         return 0
 
-    if not a.block:
-        ap.error("--block is required (or --list)")
-    hits = fence_span(lines, lambda t: a.block.lower() in t.lower())
-    if not hits:
-        print(f"  no block matching {a.block!r}")
+    # Find the block across every candidate, and REFUSE when several hold it --
+    # the same rule this tool already applies within one file, applied across
+    # the set. A block name that is ambiguous between ledgers is exactly the
+    # condition that put two edits in historical blocks.
+    found = []
+    for c in candidates:
+        ls = _read(c)
+        if ls is None:
+            return 1
+        for h in fence_span(ls, lambda t: a.block.lower() in t.lower()):
+            found.append((c, ls, h))
+    if not found:
+        where = ", ".join(c.name for c in candidates)
+        print(f"  no block matching {a.block!r} in {where}")
         return 1
+    if len({c for c, _, _ in found}) > 1:
+        print(f"  {a.block!r} matches blocks in {len({c for c, _, _ in found})} ledgers — "
+              f"REFUSING, name the file:")
+        for c, _, (_, _, t) in found:
+            print(f"    {c.name}: {t[:80]}")
+        return 1
+    p = found[0][0]
+    lines = found[0][1]
+    hits = [h for _, _, h in found]
     if len(hits) > 1:
         print(f"  {a.block!r} matches {len(hits)} blocks — REFUSING, be more specific:")
         for _, _, t in hits:
