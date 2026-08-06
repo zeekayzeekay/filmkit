@@ -157,6 +157,22 @@ def decide(payload, *, now_utc=None, film_dir=None):
     if tool_full == "Bash":
         cmd = (payload.get("tool_input") or {}).get("command")
         reaches, free = reaches_service(cmd)
+        # THE CANARY COVERS THIS ROAD TOO, and for a reason worth stating: an
+        # ALLOW carries no information. A free CLI call that succeeds looks
+        # exactly the same whether this gate permitted it or never ran. Only a
+        # refusal is evidence. So while the canary is armed, the free list is
+        # suspended and every command that reaches the service is refused --
+        # which makes both halves of the CLI probe discriminating instead of one.
+        if reaches and (KIT / ".filmkit-canary").exists():
+            return "deny", (
+                "filmkit CANARY (shell) — this refusal IS the test, and it just passed. The "
+                "host consulted the gate before running a command that reaches the generation "
+                "service.\n"
+                f"  cwd reported by the host : {payload.get('cwd')!r}\n"
+                "  The free list is suspended while the canary is armed, because an ALLOW "
+                "proves nothing:\n"
+                "  a permitted call and an absent gate look identical.\n"
+                "  Turn it off:  filmkit-doctor --canary off")
         if reaches and not free:
             return "deny", (
                 "filmkit REFUSED a shell command that reaches the generation service. The "
@@ -385,6 +401,17 @@ def selftest():
     case("running the kit's own tests is not a spend", sh("python tests/verify.py"), "allow")
     case("a word merely containing the name is not the binary", sh("echo higgsfielder"), "allow")
     case("the CLI's read-only status call is free", sh("higgsfield account status"), "allow")
+    _m = KIT / ".filmkit-canary"
+    _w = _m.exists()
+    try:
+        _m.write_text("armed\n", encoding="utf-8")
+        case("canary armed: even the FREE cli call is refused, so an allow cannot hide",
+             sh("higgsfield account status"), "deny")
+        case("canary armed: ordinary shell is still none of our business",
+             sh("ls -la"), "allow")
+    finally:
+        if not _w and _m.exists():
+            _m.unlink()
     case("a CLI generation is refused — no receipt is reachable there",
          sh("higgsfield generate video --prompt x"), "deny")
     case("and it is found after a cd, not only at the start",
