@@ -2126,3 +2126,78 @@ was wrong as a description, and it had no way to say so.
 **What is still not encoded, and is a person's:** which of the two populations is on the
 subject. The centroids and the outer-thirds share are a proxy — the proof image answers it,
 and answering it is what produced this finding.
+
+---
+
+## FK-34 · THE SELFTESTS THAT "NEED NO FILM" WERE RUN INSIDE A FILM, AND TWO OF THEM COULD NOT RUN OUTSIDE ONE
+
+**Cost:** none. The operator hit it on the first line of a runbook I wrote.
+
+**What happened.** Runbook 31 §2 said, in the `filmkit` directory:
+
+```
+python C:\ai-video\filmkit\tools\frames_check.py --selftest
+```
+
+> `! no film found in C:\ai-video\filmkit`
+
+`frames_check.py --selftest` **needs no film.** It builds a throwaway one in a temp directory
+for its own subprocesses. But the parent process did `import _project as P` at module scope
+with `PROOFS = P.DIR / "proofs"` under it, so **it could not load** outside a film — it died
+before reaching its first case. `verify_asset.py --selftest`, which discriminates a counting
+detector on images it makes itself, had exactly the same fault.
+
+**And the harness had a heading that stated the invariant it was breaking.** In `verify.py`:
+
+```
+print("\n  SELFTESTS THAT NEED NO FILM")
+run([... "verify_asset.py", "--selftest"], cwd=film, ...)     <- inside a film
+run([... "session_start.py", "--selftest"], cwd=tmp, ...)
+run([... "filmkit-promote", "--selftest"],  cwd=tmp, ...)
+run([... "filmkit-doctor",  "--selftest"],  cwd=tmp, ...)
+run([... "frames_check.py", "--selftest"], cwd=film, ...)     <- inside a film
+```
+
+Three entries honour the heading. Two do not, and those two are exactly the two that could
+not have survived it. **A harness that states an invariant and then arranges for it not to be
+tested is worse than one that never claimed it** — the heading is read as evidence.
+
+I wrote the `frames_check` line myself, three commits ago, and chose `cwd=film` without
+noticing that the line above it said the opposite.
+
+### The part that makes this a finding rather than a slip
+
+**The kit already knew this failure mode, by name, in a guard written for it.** `kit_lint`
+rule 4 says, in its own comment:
+
+> *A tool imports `_project` IF AND ONLY IF it uses it. The first port added the import to all
+> fourteen, which gave two argument-driven tools a hard dependency on a film existing — they
+> died with "no film found".*
+
+Same words, same error message, same two-tools count. The guard tests **"imports but never
+uses"**, and it cannot see the case that actually recurred: a tool that genuinely uses
+`_project` for its main job and **not for the one flag that must work without a film**. The
+rule was built from the first instance and fitted to its shape.
+
+**Fix.** Both tools now resolve `_project` on first use, behind an accessor, which is the
+pattern `bin/filmkit-promote` already carries with a comment explaining it — I did not follow
+it in either file. And **`verify.py` now runs every entry in that section with `cwd=tmp`**, so
+the heading is enforced rather than asserted. That is the real guard: a behavioural check
+beats a text rule, because the text rule has to anticipate the shape of the next instance and
+this one's shape was new.
+
+Rule 4 also had to be widened. Deferring resolution binds the module to a name and returns it
+without ever writing `P.`, so the lazy pattern was reported as an **unused import** — the rule
+flagging the thing that removes the dependency it exists to prevent. Use-detection is now AST
+`Name` lookup rather than a regex for attribute access.
+
+**The transferable rule.** *A heading is a claim, and nothing enforces it.* `SELFTESTS THAT
+NEED NO FILM` was true when written and became false one line at a time, with each new line
+copied from the shape of the work rather than from the promise above it. **Where a group of
+things shares a stated property, make the property a parameter of the group** — one `cwd`, one
+loop — so a new member cannot join without it.
+
+**What is still not encoded:** whether a given `--selftest` actually tests anything without a
+film, as opposed to merely starting. `verify.py` checks the exit code and that no traceback
+appears; a selftest that quietly skipped all its cases outside a film would pass. Each of
+these prints its case list, and a person reads it.

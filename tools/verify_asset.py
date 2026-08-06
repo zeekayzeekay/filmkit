@@ -51,19 +51,48 @@ faults were reported against @tarn_door.
 """
 import argparse, datetime, json, pathlib, re, sys
 from PIL import Image, ImageDraw
-import _project as P  # FK1: where the film is
+import _utf8  # noqa: F401  — the stream hardening, which _project used to bring
 
-HERE = P.DIR
-FACTS = P.PATH
-PROOFS = P.DIR / "proofs" / "asset_claims"
+# FK-34. _project IS RESOLVED ON FIRST USE, NOT AT IMPORT.
+#
+# These three used to be module-level, so this file could not load outside a
+# film -- and `--selftest`, which discriminates a counting detector on images it
+# makes itself and needs no film at all, died before its first case. `verify.py`
+# ran it with cwd=film, under a heading that reads "SELFTESTS THAT NEED NO
+# FILM", so the harness that states the invariant was configured to hide the two
+# entries breaking it.
+#
+# `bin/filmkit-promote` already carries this pattern with a comment explaining
+# it. Two tools did not follow it and the same heading covered both.
+_P = None
+
+
+def _proj():
+    global _P
+    if _P is None:
+        import _project as P  # FK1: where the film is
+        _P = P
+    return _P
+
+
+def HERE():
+    return _proj().DIR
+
+
+def FACTS():
+    return _proj().PATH
+
+
+def PROOFS():
+    return _proj().DIR / "proofs" / "asset_claims"
 
 
 def load():
-    return json.loads(FACTS.read_text(encoding="utf-8"))
+    return json.loads(FACTS().read_text(encoding="utf-8"))
 
 
 def save(d):
-    FACTS.write_text(json.dumps(d, indent=2), encoding="utf-8")
+    FACTS().write_text(json.dumps(d, indent=2), encoding="utf-8")
 
 
 def crop(path, box, out, label):
@@ -290,7 +319,7 @@ def main():
     if not src:
         print(f"  {a.tag} has no 'file' recorded in the ledger. Add it first.")
         return 1
-    path = HERE / src
+    path = HERE() / src
     if not path.exists():
         print(f"  file not found: {path}")
         return 1
@@ -367,8 +396,8 @@ def main():
     compare_proof = None
     if div:
         import subprocess
-        cmd = [sys.executable, P.tool("compare_asset.py"), a.tag, a.compared_with, "--property", a.prop]
-        r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="backslashreplace", cwd=str(HERE))
+        cmd = [sys.executable, _proj().tool("compare_asset.py"), a.tag, a.compared_with, "--property", a.prop]
+        r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="backslashreplace", cwd=str(HERE()))
         out = (r.stdout or "") + (r.stderr or "")
         print(out)
         if "comparison allowed" not in out:
@@ -390,10 +419,10 @@ def main():
         print("    that is how F-46 happened. See element_rules.face_dependence.\n")
         return 1
 
-    PROOFS.mkdir(parents=True, exist_ok=True)
+    PROOFS().mkdir(parents=True, exist_ok=True)
     box = tuple(float(x) for x in a.box.split(","))
     n = len(rec.get("verified", [])) + 1
-    out = PROOFS / f"{a.tag.lstrip('@')}_{n:02d}.png"
+    out = PROOFS() / f"{a.tag.lstrip('@')}_{n:02d}.png"
     crop(path, box, out, a.claim or "look")
     print(f"\n  proof written: {out}\n  and: {str(out).replace('.png','_where.png')}")
 
@@ -428,7 +457,7 @@ def main():
             print("    that crop, and count again. Two proofs or no claim.\n")
             return 1
         ebox = tuple(float(x) for x in a.extent.split(","))
-        extent = PROOFS / f"{a.tag.lstrip('@')}_{n:02d}_extent.png"
+        extent = PROOFS() / f"{a.tag.lstrip('@')}_{n:02d}_extent.png"
         crop(path, ebox, extent, "extent")
         print(f"  extent proof written: {extent}")
         if (ebox[0] > box[0] or ebox[1] > box[1]
@@ -477,8 +506,8 @@ def main():
         "rev": d["_fact_rev"],
         "claim": a.claim,
         "box": list(box),
-        "proof": str(out.relative_to(HERE)),
-        "extent_proof": str(extent.relative_to(HERE)) if extent else None,
+        "proof": str(out.relative_to(HERE())),
+        "extent_proof": str(extent.relative_to(HERE())) if extent else None,
         "date": datetime.date.today().isoformat(),
         "supersedes": a.supersedes,
         "aspect": rec.get("aspect"),

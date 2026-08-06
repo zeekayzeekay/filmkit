@@ -85,6 +85,8 @@ def text_files():
     return out
 
 
+import ast as _ast
+
 FAIL = []
 
 
@@ -175,7 +177,24 @@ for f in scripts():
         continue
     src = f.read_text(encoding="utf-8")
     imports = "import _project as P" in src
-    uses = re.search(r"\bP\.[A-Za-z_]", src) is not None
+    # FK-34. ANY use of the alias counts, not just attribute access. A tool that
+    # defers resolution binds the module to a name and returns it —
+    #
+    #     def _proj():
+    #         global _P
+    #         if _P is None:
+    #             import _project as P
+    #             _P = P
+    #         return _P
+    #
+    # — which never writes `P.` and was reported as an unused import. This rule
+    # exists to stop a film dependency being acquired by accident; flagging the
+    # pattern that REMOVES one is the rule working against its own purpose.
+    try:
+        uses = any(isinstance(n, _ast.Name) and n.id == "P"
+                   for n in _ast.walk(_ast.parse(src)))
+    except SyntaxError:
+        uses = re.search(r"\bP\b", src) is not None
     if imports and not uses:
         fail("unused-project-import", f.name,
              "imports _project but never uses it. That is not a dead import — resolving the "
@@ -370,7 +389,6 @@ if _SKILLS.exists():
 # That is not hypothetical: `guard_coverage` reported three rules UNPROVEN on
 # Windows and zero on Linux, against byte-identical files.
 # --------------------------------------------------------------------------
-import ast as _ast
 
 for _f in scripts():
     try:

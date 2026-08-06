@@ -136,9 +136,17 @@ def main():
         run([sys.executable, str(kit / "bin" / "filmkit-doctor")], cwd=film,
             expect_zero=False, name="doctor reports the film's wiring")
 
+        # FK-34. EVERY ENTRY HERE RUNS IN A DIRECTORY WITH NO FILM, because
+        # that is what the heading says and it was not true of two of them.
+        # `verify_asset --selftest` and `frames_check --selftest` both ran with
+        # cwd=film, and both resolved _project at import, so neither could have
+        # started outside one. The operator found it by running the documented
+        # command from the kit directory, which is the first place anybody would
+        # run a selftest. A harness that states an invariant and then arranges
+        # for it not to be tested is worse than one that never claimed it.
         print("\n  SELFTESTS THAT NEED NO FILM")
         run([sys.executable, str(kit / "tools" / "verify_asset.py"), "--selftest"],
-            cwd=film, name="counting detector discriminates")
+            cwd=tmp, name="counting detector discriminates")
         run([sys.executable, str(kit / "hooks" / "session_start.py"), "--selftest"],
             cwd=tmp, name="state loader briefs and fails silent")
         run([sys.executable, str(kit / "bin" / "filmkit-promote"), "--selftest"],
@@ -150,7 +158,7 @@ def main():
         run([sys.executable, str(kit / "tests" / "status_test.py")],
             cwd=tmp, name="each block status fires on its own text only")
         run([sys.executable, str(kit / "tools" / "frames_check.py"), "--selftest"],
-            cwd=film, name="a gate flag agrees or refuses, never ignored")
+            cwd=tmp, name="a gate flag agrees or refuses, never ignored")
 
         if real:
             print(f"\n  A REAL FILM — {real}")

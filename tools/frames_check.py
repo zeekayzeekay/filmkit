@@ -55,9 +55,29 @@ import argparse, pathlib, sys
 import numpy as np
 import cv2
 from PIL import Image, ImageDraw
-import _project as P  # FK1: where the film is
+import _utf8  # noqa: F401  — the stream hardening, which _project used to bring
 
-PROOFS = P.DIR / "proofs"
+# FK-34. _project IS IMPORTED LAZILY, INSIDE THE FUNCTIONS THAT NEED A FILM.
+#
+# It used to be `import _project as P` at module scope with `PROOFS = P.DIR /
+# "proofs"` under it, so the module could not load outside a film -- and
+# `--selftest`, which builds its own throwaway film for its subprocesses and
+# needs none itself, died before reaching its first case. `verify.py` ran it
+# with cwd=film, inside a section headed "SELFTESTS THAT NEED NO FILM", so the
+# one harness that would have caught it was configured not to.
+#
+# `bin/filmkit-promote` already carries this pattern with a comment explaining
+# it. I did not follow it here.
+_PROOFS = None
+
+
+def proofs():
+    """The film's proofs directory, resolved on FIRST USE rather than at import."""
+    global _PROOFS
+    if _PROOFS is None:
+        import _project as P  # FK1: where the film is
+        _PROOFS = P.DIR / "proofs"
+    return _PROOFS
 
 # Thresholds measured on the four G3 keyframes and on draft 1, whose opening
 # carries no rim at all (0.03). Sources in TARN_FINDINGS.md, finding F-01.
@@ -259,7 +279,8 @@ def rim_chroma(arr, box, proof_name=None):
                warm_cx=_cx(warm), cool_cx=_cx(cool),
                warm_edge=_edge(warm), cool_edge=_edge(cool))
     if proof_name:
-        PROOFS.mkdir(exist_ok=True)
+        _p = proofs()
+        _p.mkdir(exist_ok=True)
         over = (arr * 0.30).astype(np.uint8)
         sub = over[y0:y1, x0:x1]
         rb_px = (R - B)
@@ -268,7 +289,7 @@ def rim_chroma(arr, box, proof_name=None):
         over[y0:y1, x0:x1] = sub
         im = Image.fromarray(over)
         ImageDraw.Draw(im).rectangle([x0, y0, x1, y1], outline=(60, 255, 60), width=3)
-        out = PROOFS / f"{proof_name}_rimchroma.png"
+        out = _p / f"{proof_name}_rimchroma.png"
         im.save(out)
         res["proof"] = str(out)
     return res
@@ -315,7 +336,8 @@ def measure(path, label=None):
                rb_neutral=rb, neutral_px=npx, lum_mean=float(L.mean()))
     # PROOF — magenta is the rim actually counted, dim cyan is what was DISCARDED
     # as skin or bright-field. Seeing the discard is the whole point.
-    PROOFS.mkdir(exist_ok=True)
+    _p = proofs()
+    _p.mkdir(exist_ok=True)
     over = (arr * 0.30).astype(np.uint8)
     over[warm & ~rim] = (0, 110, 130)
     over[rim] = (255, 0, 200)
@@ -323,7 +345,7 @@ def measure(path, label=None):
     ImageDraw.Draw(p).rectangle([W * x0, H * y0, W * x1, H * y1],
                                 outline=(60, 255, 60), width=3)
     name = label or pathlib.Path(path).stem
-    out = PROOFS / f"{name}_rimmask.png"
+    out = _p / f"{name}_rimmask.png"
     p.save(out)
     res["proof"] = str(out)
     return res
