@@ -1319,3 +1319,60 @@ tooling, on a command the operator ran; a guard's refusal should state the fact 
 
 **What is not encoded:** whether a less careful assistant would have run it. This one did
 not, and the finding exists precisely because the design should not have depended on that.
+
+---
+
+## FK-23 · THE ROAD HE ACTUALLY USES WAS THE ONE WITH NO RECEIPT LOGIC
+
+<!-- guard: automatic   scope: delivery
+     ask: which road will this operator actually take, and is that the road the gate was designed around? -->
+
+**What happened.** Probe 0 could not run: the Higgsfield **MCP server cannot be connected in
+a desktop Code session**, because that session is non-interactive and the OAuth flow needs
+`/mcp`. What is wired there instead are skills — `higgsfield-generate`, `higgsfield-soul-id`
+and others — and they drive the **CLI**.
+
+So in the surface the operator wants to work in, the road to spending credits is the shell.
+And the shell branch, added the day before under FK-20, was a **blanket deny with no receipt
+logic at all**. Every generation refused, including correct ones.
+
+**That is not safety, it is a wall.** The whole design — preflight signs a prompt, the gate
+allows exactly that prompt — existed only on the MCP road, which on this machine, in this
+surface, does not exist. The kit's primary mechanism guarded a door nobody walks through,
+and the door everyone walks through was nailed shut. An unusable guard gets removed, and
+then there is no guard.
+
+**Fix.** The CLI road is held to the same standard as the MCP road, by the same code:
+
+- `check_receipt()` is factored out of the MCP branch and called by both. A second copy
+  would be a second place to drift, and the drift would show up as one road being easier to
+  fire from than the other.
+- `higgsfield generate create|workflow` has its `--prompt` parsed out with `shlex` and
+  checked against a receipt. Same hash, same staleness window, same refusal text.
+- A prompt the gate cannot extract is **denied**, not allowed. Fail closed.
+- Everything after the binary name is deny-by-default, exactly as an unclassified MCP tool
+  is. `soul-id train` is refused because nobody has classified it, not because it was
+  recognised as dangerous.
+- The documented aliases `higgs`, `hf` and `gen` are normalised once, rather than doubling
+  every entry — a list maintained in two spellings is a list maintained in one.
+
+**The free list now has two tiers, and the split is the honest part:**
+
+```
+FREE_CLI_OBSERVED    "account status"        -- run and watched, 2 Aug
+FREE_CLI_FROM_HELP   "generate cost", ...    -- read off --help, never executed here
+```
+
+Both allow the call. Only one is evidence. A single flat list would invite the next reader
+to trust all of it equally, and `generate cost` claiming to submit no job is a claim from a
+help string, not an observation.
+
+**The transferable rule.** *Design the gate around the road the operator will actually
+take.* Which one that is is a fact about their machine and their habits, not about the
+architecture — and it is discoverable by asking, or by watching one session, long before
+building. This gate was designed around MCP because MCP was what I could see from here.
+
+**What is not encoded:** whether `generate cost` truly spends nothing, and whether the CLI
+accepts a prompt any way other than `--prompt` — a file, stdin, an environment variable.
+Each of those would be a road past the receipt check, and each would come back as an allow,
+which is no evidence at all.

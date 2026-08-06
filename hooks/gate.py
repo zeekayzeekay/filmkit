@@ -125,29 +125,64 @@ def find_film(start):
 # not equivalent, and the report says so rather than letting the green line imply
 # otherwise.
 # ---------------------------------------------------------------------------
-CLI_NAMES = ("higgsfield",)
+CLI_NAMES = ("higgsfield", "higgs", "hf")     # the binary's own documented aliases
 
-# Read-only CLI invocations, allowed without a receipt. ONE entry, because one is
-# all anybody has actually run and watched. Adding another is a deliberate act
-# with a reason, exactly like FREE above -- not a widened wildcard.
-FREE_CLI = (
-    "account status",     # observed 2 Aug: returns a credit balance, spends nothing
+# Free, and the two tiers are the POINT. `observed` was run and watched. `from
+# help text` was read off `--help` and never executed here. Both allow the call;
+# only one of them is evidence, and a list that hides which is which invites the
+# next reader to trust all of it equally.
+FREE_CLI_OBSERVED = (
+    "account status",          # 2 Aug: returned a credit balance, spent nothing
 )
+FREE_CLI_FROM_HELP = (
+    "generate cost",           # "Estimate generation cost" -- submits no job
+    "generate get", "generate list", "generate wait",
+    "model list", "workflow list", "preset list", "voices list",
+    "version", "--help", " -h",
+)
+
+# Subcommands that CREATE work, and therefore need a receipt like any other spend.
+CLI_SPENDS = ("generate create", "generate workflow")
+
+
+def cli_prompt(command):
+    """The --prompt value, or None. Quoting is a parser's job, not a regex's."""
+    import re as _re
+    import shlex as _shlex
+    for parse in (lambda c: _shlex.split(c, posix=True), lambda c: _shlex.split(c, posix=False)):
+        try:
+            toks = parse(command)
+        except ValueError:
+            continue
+        for i, tok in enumerate(toks):
+            if tok == "--prompt" and i + 1 < len(toks):
+                return toks[i + 1].strip('"').strip("'")
+            if tok.startswith("--prompt="):
+                return tok.split("=", 1)[1].strip('"').strip("'")
+    m = _re.search(r'--prompt[= ]+"([^"]*)"', command)
+    return m.group(1) if m else None
 
 
 def reaches_service(command):
-    """Does this shell command reach the generation service, and is it read-only?
+    """(reaches, is_free, spends) for a shell command line.
 
-    Returns (reaches, is_free). Deliberately crude: a substring on the binary name
-    and an exact-ish match on the one subcommand anyone has watched."""
+    Deliberately crude on the binary name and deny-by-default on everything
+    after it: a subcommand nobody has classified is refused, exactly as an
+    unclassified MCP tool is."""
     import re as _re
     if not isinstance(command, str) or not command.strip():
-        return False, False
+        return False, False, False
     low = command.lower()
     hit = any(_re.search(rf"(^|[\s;|&(]){_re.escape(n)}\b", low) for n in CLI_NAMES)
     if not hit:
-        return False, False
-    return True, any(f in low for f in FREE_CLI)
+        return False, False, False
+    # The binary documents `gen` as an alias for `generate`. Normalise once here
+    # rather than doubling every entry below -- a list that has to be maintained
+    # in two spellings is a list that will be maintained in one.
+    low = _re.sub(r"\bgen\b", "generate", low)
+    free = any(f in low for f in FREE_CLI_OBSERVED + FREE_CLI_FROM_HELP)
+    spends = any(s in low for s in CLI_SPENDS)
+    return True, free and not spends, spends
 
 
 # The standing notice on EVERY refusal, added in one place rather than written
@@ -198,7 +233,7 @@ def _decide(payload, *, now_utc=None, film_dir=None):
     # common one.
     cmd = (payload.get("tool_input") or {}).get("command")
     if isinstance(cmd, str):
-        reaches, free = reaches_service(cmd)
+        reaches, free, spends = reaches_service(cmd)
         # THE CANARY COVERS THIS ROAD TOO, and for a reason worth stating: an
         # ALLOW carries no information. A free CLI call that succeeds looks
         # exactly the same whether this gate permitted it or never ran. Only a
@@ -217,6 +252,18 @@ def _decide(payload, *, now_utc=None, film_dir=None):
                 "  This is a test in progress and the reader is its subject. The operator "
                 "disarms it\n"
                 "  from their own terminal, and nowhere else.")
+        # A CLI generation is held to the SAME standard as an MCP one: a receipt
+        # for exactly this prompt. Blanket-denying the road you actually use is
+        # safe and unusable, and unusable guards get removed.
+        if reaches and spends:
+            prompt = cli_prompt(cmd)
+            if not prompt:
+                return "deny", (
+                    "filmkit REFUSED a CLI generation whose prompt it could not read. The "
+                    "receipt is keyed to the exact prompt text, so a prompt the gate cannot "
+                    "extract is a prompt it cannot check.\n"
+                    "  Pass it as  --prompt \"<text>\"  exactly as preflight exported it.")
+            return check_receipt("the CLI generation", prompt, payload, film_dir, now_utc)
         if reaches and not free:
             return "deny", (
                 "filmkit REFUSED a shell command that reaches the generation service. The "
@@ -298,6 +345,18 @@ def _decide(payload, *, now_utc=None, film_dir=None):
             f"the call to check against a receipt.\n"
             f"  Tell the operator this tool is unclassified and let them decide.")
 
+    return check_receipt(tool, prompt, payload, film_dir, now_utc)
+
+
+def check_receipt(label, prompt, payload, film_dir, now_utc):
+    """
+    Is there an all-green preflight receipt for EXACTLY this prompt?
+
+    Factored out because there are now two roads to a spend -- an MCP tool
+    and a CLI command -- and they must be held to the same standard. A
+    second copy of this logic would be a second place for it to drift, and
+    the drift would show up as one road being easier to fire from.
+    """
     import datetime as _dt
     import json as _json
     import _project as P
@@ -314,14 +373,14 @@ def _decide(payload, *, now_utc=None, film_dir=None):
         facts = {}
     if film is None:
         return "deny", (
-            f"filmkit REFUSED {tool}. No film found from {payload.get('cwd')!r} — expected a "
+            f"filmkit REFUSED {label}. No film found from {payload.get('cwd')!r} — expected a "
             f"film_facts.json at or above it. The gate will not authorise a spend it cannot "
             f"check. If this is deliberate, run outside a film without the hook registered.")
     if facts_path is not None and facts_path.exists():
         try:
             facts = _json.loads(facts_path.read_text(encoding="utf-8"))
         except Exception as e:
-            return "deny", (f"filmkit REFUSED {tool}. The film's facts file could not be read "
+            return "deny", (f"filmkit REFUSED {label}. The film's facts file could not be read "
                             f"({e}). Refusing rather than assuming.")
 
     now = now_utc or _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -331,7 +390,7 @@ def _decide(payload, *, now_utc=None, film_dir=None):
     if not bad:
         return "allow", ""
 
-    lines = [f"filmkit REFUSED {tool}. " + "; ".join(bad) + "."]
+    lines = [f"filmkit REFUSED {label}. " + "; ".join(bad) + "."]
     if rec is None:
         lines.append(
             f"This prompt hashes to {R.short(R.digest(prompt))}. A receipt is written only by "
@@ -452,10 +511,19 @@ def selftest():
     def named(tool, c):
         return {"tool_name": tool, "tool_input": {"command": c}}
     for _t in ("Bash", "PowerShell", "Terminal", "some_future_shell"):
-        case(f"{_t}: a CLI generation is refused whatever the tool is called",
-             named(_t, "higgsfield generate video --prompt x"), "deny")
+        case(f"{_t}: a CLI generation with no receipt is refused, whatever the tool",
+             named(_t, 'higgsfield generate create nano --prompt "a man"'), "deny")
         case(f"{_t}: an ordinary command is not our business",
              named(_t, "dir"), "allow")
+    # THE CLI, CLASSIFIED. Deny-by-default after the binary name: a subcommand
+    # nobody has classified is refused exactly as an unclassified MCP tool is.
+    case("cost estimation submits no job", sh("higgsfield generate cost nano -p x"), "allow")
+    case("listing jobs is free", sh("hf generate list"), "allow")
+    case("the gen alias is the same command", sh('higgs gen create m --prompt "x"'), "deny")
+    case("an unclassified subcommand is refused, not guessed",
+         sh("higgsfield soul-id train"), "deny")
+    case("a generation whose prompt cannot be read is refused",
+         sh("higgsfield generate create nano --prompt-file p.txt"), "deny")
     case("a tool with no command field is not a shell",
          {"tool_name": "Read", "tool_input": {"file_path": "x.md"}}, "allow")
     case("running the kit's own tests is not a spend", sh("python tests/verify.py"), "allow")
