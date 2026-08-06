@@ -2405,3 +2405,52 @@ untouched.
 and coverage is the thing least likely to be checked.* Before asserting "X is the only one",
 say how you looked and what that way of looking cannot see. Here: an AST scan for argparse
 cannot see argv parsed by hand, and roughly a third of the CLIs in any Python codebase are.
+
+---
+
+## FK-38 · A GUARD THAT STOPS AT THE FIRST INSTANCE SAYS THE FAULT IS FIXED WHEN IT IS FIXED ONCE
+
+**Cost:** none. Found because a verification script I wrote swept wider than the guard did.
+
+**What happened.** `lint_prompt`'s `asset-claim-superseded` check walks each retired claim's
+`contradicts` patterns over every sentence and reported **one** error on G3 v5:
+
+> *`@cafe_int`: each bay is EIGHT lights … `\b(bay|bays)\b` + `\bfour\b\s+…lights?\b` co-occur
+> in: "the cafe's green door is an opening in that same frontage…"*
+
+The loop `break`s after the first matching sentence. **There were two.** A POSITIVE LOCK
+thirty lines further down said *"That schedule is the same in the bays and in the door's four
+lights"* — the same two patterns, the same retired shape, entirely unreported.
+
+I only saw it because the patch script I wrote to fix the first one **re-checked the whole
+block for the pattern afterwards** rather than trusting the replacement, and printed both.
+
+**Why the break is worse than an efficiency choice.** The operator's loop is: run, fix what it
+says, run again. With one error per entry, fixing the reported sentence and re-running yields
+**one error again** — and a run that goes from one error to one error reads as *no progress*
+when it is exactly half. The count is not a measure of the work left, and nothing in the
+output says so.
+
+Compare the same file's `tripwire` and `depth-order-unstated`, which report `17/16` and `2/1`
+— counts above the fixture's expectation, deliberately, because *more than expected* is
+information. This check threw that away for the one class of fault the project pays credits
+for.
+
+**Fix.** Every matching sentence, each labelled `(n of N)`.
+
+**And the fix in the block is mine, not the guard's.** The door really does have four lights
+(`@cafe_int` rev3, `@cafe_door_int_right` rev94) and the bays have eight (rev4, with rev1's
+four RETRACTED). Both my sentences were true. But **a sentence a guard cannot tell apart is
+one a model cannot tell apart either**, which is the entire reason the guard exists — so the
+door's count and the bays' now live in separate sentences, and the lock names the door's
+*glazing* rather than repeating the number.
+
+**The transferable rule.** *An early exit in a detector converts a count into a boolean, and
+the caller cannot see which they were given.* If a check reports "the first one", the operator
+running it in a fix-and-re-run loop is measuring their progress with an instrument that always
+reads the same. **Report every instance, or say in the output that you are not.**
+
+**A second, smaller one from the same script.** My verification sweep first ran over the WHOLE
+FILE and failed on a line in the block's own change table — prose *explaining* that the door's
+four differ from the bays' eight, in commentary `lint_prompt` never reads. **A check wider
+than the thing it checks reports faults that are not in it.** Scoped to the fenced body.

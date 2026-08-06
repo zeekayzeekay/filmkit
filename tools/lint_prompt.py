@@ -1094,15 +1094,29 @@ def asset_claims(body, facts):
             # So the discriminator is not inferable and must be WRITTEN DOWN
             # when the fact is retired: the token groups that, co-occurring in
             # one sentence, make the statement false. Every group must hit.
+            # FK-38. EVERY MATCHING SENTENCE, NOT THE FIRST.
+            #
+            # This loop used to `break` after the first hit, so one contradiction
+            # entry produced at most one error however many sentences restated
+            # the retired fact. Measured on G3 v5: it reported the @cafe_int
+            # door sentence and stayed silent about a POSITIVE LOCK saying the
+            # same thing thirty lines down. Fix the reported one, re-run, and the
+            # next appears -- so the count of errors is not a measure of the work
+            # left, and a run that goes from one error to one error reads as no
+            # progress when it is half.
+            #
+            # A guard that stops at the first instance tells you the fault is
+            # fixed when it is fixed ONCE.
             for c in v.get("contradicts", []):
                 pats, why = c["all"], c.get("why", "")
-                for s in sentences:
-                    if all(re.search(p, s, re.I) for p in pats):
-                        f.append(("ERROR", "asset-claim-superseded",
-                                  f"{tag}: {why or 'retired fact restated'} — "
-                                  f"{' + '.join(pats)} co-occur in: {s.strip()[:130]!r}. "
-                                  f"Verified: {v.get('claim')!r}"))
-                        break
+                hits = [s for s in sentences
+                        if all(re.search(p, s, re.I) for p in pats)]
+                for n, s in enumerate(hits, 1):
+                    where = f" ({n} of {len(hits)})" if len(hits) > 1 else ""
+                    f.append(("ERROR", "asset-claim-superseded",
+                              f"{tag}{where}: {why or 'retired fact restated'} — "
+                              f"{' + '.join(pats)} co-occur in: {s.strip()[:130]!r}. "
+                              f"Verified: {v.get('claim')!r}"))
     return f
 
 
