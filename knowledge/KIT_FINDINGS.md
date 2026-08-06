@@ -1560,3 +1560,101 @@ warm or cool, and still says "stopping" where its own action beat says he never 
 None of that is machine-checkable from here and none of it is claimed to be. This guard
 catches one thing: a **filename** that is no longer the selection. That is the class that
 costs credits silently.
+
+---
+
+## FK-27 · I ASKED FOR ONE DIRECTION AND WAS CERTIFIED GREEN ON ITS OPPOSITE
+
+**Cost:** none in credits. It nearly cost the *meaning* of a gate reading I had just told the
+operator to trust, and it took two invocations out of an acceptance number I have been
+quoting all week.
+
+**What happened.** I wrote the command myself and handed it over:
+
+```
+frames_check.py G3\k5-30.png G3\k6-v16-output.png --pair --expect warmer
+```
+
+It came back **PASS**, on a line reading `swing -24.3 (need <= -15.0)`. The gate tests a
+**warm→cool** swing. I asked for **warmer**. `--expect` is declared in `add_argument`,
+printed in the tool's own usage block, and **read nowhere in the file.** A caller's stated
+intent went into the process and out of the universe, and the tool printed a green word.
+
+Nothing was measured wrongly. Every number in that output is correct. What was wrong is that
+the output answered a question the operator had not asked, in a form indistinguishable from
+an answer to the one he had.
+
+**Why the direction is not a setting, which is the part worth keeping.** The gate is hard
+coded to a cool swing and the reason is written next to it under F-28: *there is no golden
+light at the window end of this room*, so a warm-swing gate is not the wrong test, it is one
+**nothing could pass**. The old end gate demanded R−B > 45 from a light measuring +1.7 and
+three frames were graded against it. So the flag can honestly do exactly two things — agree,
+or refuse. It may never redirect, and it may never be discarded.
+
+**Fix.** `--expect` defaults to `auto`; naming the direction the gate does not test is
+**refused with exit 2, before a single image is opened**; and the PAIR block now names the
+gated direction in words — *"gating a COOLER swing"* — rather than leaving it implicit in the
+sign of a threshold. Five paired selftest cases, `frames_check.py --selftest`.
+
+The one that matters is the third: the refusal must arrive **on paths that do not exist**. A
+tool that opens the frames first and argues afterwards has already put numbers on the screen
+answering the wrong question, and the numbers are the part people remember. The fifth is the
+control — a non-pair run must **not** be refused, or the set would pass on a tool that
+refused everything, which is the cheapest way to look strict.
+
+### The guard, and what it caught that I did not know about
+
+The specific fix is worth little. The general one is a `kit_lint` rule: **no tool may accept
+an option it never reads.** AST-walk every `add_argument`, resolve its dest, and fail if that
+name appears nowhere else in the file.
+
+It found the one I knew about **and one I did not**:
+
+- **`selections.py --check` was also declared and unread.** It appeared to work only because
+  the report is what a bare invocation does anyway. So the flag named in the usage block —
+  and passed by `preflight` — controlled nothing, and would have gone on controlling nothing
+  the day somebody gave the tool a different default. Worse, `--set ROLE FILE --check` wrote
+  the selection and silently skipped the check the operator had just typed. Now refused.
+
+**And a third, found while fixing the second.** `dual_run.py` was invoking
+`selections.py --list`. **That tool has no `--list`.** Both sides printed the same argparse
+usage error and exited 2, so the comparison agreed — about nothing — and it was counted `ok
+… identical`. **It was one of the 43 invocations I have been quoting as this film's
+acceptance evidence.** Two processes that never reached their own code agree about nothing.
+Removed; the honest count is 42; and `dual_run` now **fails** any invocation where neither
+side ran, so it cannot be reintroduced quietly.
+
+That is an invocation that could not fail — the exact fault I asked the operator to look for
+in my own probe designs, sitting in the gate the whole time.
+
+**And a fourth, found by running the new selftest.** `frames_check --pair` crashed with a
+`TypeError` when `rim_chroma` found no lit edge. The `--role` path had guarded that since it
+was written; the `--pair` path never had. A traceback is not a finding — it tells the
+operator the tool is broken when what actually happened is that his frame has no rim in the
+head box, which *is* the answer.
+
+**Two process notes, both against me.**
+
+*The check did not run when I first wrote it.* I appended it to the end of `kit_lint.py`,
+after `if __name__ == "__main__": sys.exit(main())`. It reported clean. A check that never
+executed, in the file whose job is to catch things that never execute — and the only reason I
+noticed is that I already knew of one fault it had to find. **Write the failing case first,
+then the check.** A new rule that reports clean on its first run has not been observed to
+work; it has been observed to be silent.
+
+*The first selftest passed one case for the wrong reason.* Its subprocesses ran in a
+directory with no film, so `_project` refused at import and four cases died on that. The
+fifth **passed** — because its assertion was *"REFUSED is not in the output"*, and a crash
+contains no such word. **A negative assertion passes on a process that never started.** Pair
+every one with something positive from the same run.
+
+**The transferable rule.** *An interface that accepts a value it cannot honour must refuse
+it.* The three options are honour, refuse, or discard, and discarding is the only one that
+leaves the caller believing something false. It is the whole FK-20/21/24 family again — a
+name accepted and never resolved — except that here the name carried the caller's **intent**,
+which is worse: a tool that silently discards intent cannot be argued with, because its green
+looks exactly like the green that answers you.
+
+**What is not encoded:** whether `GATE_DIRECTION` is the right direction for any room. It is
+a measurement, it is recorded under F-28, and the selftest says in its own closing line that
+it does not test it.
