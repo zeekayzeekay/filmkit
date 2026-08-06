@@ -397,12 +397,54 @@ elif "eol=lf" not in _ga.read_text(encoding="utf-8"):
     fail("gitattributes-no-eol", ".gitattributes",
          "exists but pins no eol. text=auto alone still lets a platform decide.")
 
-for _f in scripts():
-    if b"\r\n" in _f.read_bytes():
-        fail("crlf-in-tracked-file", f"{_f.parent.name}/{_f.name}",
-             "contains CRLF. The repo pins LF; a CRLF file here means the working tree "
-             "was converted after checkout, and every hash manifest that covers it is "
-             "now wrong. Fix with: git add --renormalize .")
+# FK-31. ONE FINDING, NOT ONE PER FILE -- AND THE RIGHT CAUSE AND THE RIGHT FIX.
+#
+# The first version of this check reported a separate fault per file and said:
+#
+#   "a CRLF file here means the working tree was converted after checkout, and
+#    every hash manifest that covers it is now wrong. Fix with: git add
+#    --renormalize ."
+#
+# On the operator's machine that printed FOURTEEN identical paragraphs, and all
+# three of its claims were wrong.
+#
+#  1. CAUSE. Nothing converted anything after checkout. `.gitattributes` applies
+#     AT CHECKOUT and does not rewrite files already on disk, so every file not
+#     touched by a commit since it landed still carries the endings it was
+#     checked out with under core.autocrlf=true. The committed blobs are LF --
+#     verified with `git cat-file`, not assumed.
+#
+#  2. FIX. `git add --renormalize .` fixes the INDEX, not the working tree.
+#     Reproduced in a scratch repo: after running it the file was still CRLF on
+#     disk and `git status` went clean -- which is worse than doing nothing,
+#     because it makes the symptom invisible. What works is deleting the file
+#     and checking it out again, which is non-destructive on a clean tree and
+#     was verified the same way.
+#
+#  3. CONSEQUENCE. "every hash manifest that covers it is now wrong" -- no
+#     manifest in this kit covers these files by content. SOURCE_SHA256.txt
+#     covers the ORIGIN project's scripts; fixtures/manifest.json is a rule
+#     corpus, not hashes of source. I published a consequence without checking
+#     it, inside the check written to close FK-16, which is the finding about
+#     publishing consequences without checking them.
+#
+# And why status stays clean while this is true: git trusts its stat cache. The
+# index's recorded mtime and size match those files, so it never re-reads them.
+# `git ls-files --eol` reads them and is the command that settles it.
+_crlf = [f"{f.parent.name}/{f.name}" for f in scripts() if b"\r\n" in f.read_bytes()]
+if _crlf:
+    fail("crlf-in-working-tree", f"{len(_crlf)} file(s)",
+         "carry CRLF on disk while the repo pins LF and the committed blobs ARE LF:\n      "
+         + "\n      ".join(_crlf)
+         + "\n\n      Nothing is broken by this -- no tool here reads bytes that care. What it "
+           "\n      costs is that a reading taken on this machine no longer describes another, "
+           "\n      which is the entire reason the endings are pinned (FK-16).\n"
+           "\n      Confirm:  git ls-files --eol <path>     i/lf w/crlf is the fault"
+           "\n      Do NOT use `git add --renormalize .` -- it fixes the index, leaves the "
+           "\n      working tree CRLF, and makes git report clean.\n"
+           "\n      Repair, on a CLEAN tree, per file: delete it and check it out again.\n"
+           "        git ls-files --eol | Select-String 'w/crlf' | ForEach-Object {\n"
+           "          $p = ($_ -split \"\\t\")[1]; Remove-Item -Force $p; git checkout -- $p }\n")
 
 
 def main():

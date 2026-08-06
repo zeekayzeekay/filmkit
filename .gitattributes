@@ -11,9 +11,25 @@
 # describes the other. An unpinned repository quietly makes cross-platform
 # inspection unreliable, and this kit is inspected across platforms constantly.
 #
-# The cost, since it is real: a clone that already holds CRLF goes dirty the
-# first time these attributes apply, until one `git reset --hard` renormalises
-# it. That is a one-time cost of pinning, not the repair of a fault.
+# The cost, since it is real, and the first version of this comment got it
+# wrong in the direction that matters (FK-31):
+#
+# A clone that already holds CRLF does NOT go dirty. These attributes apply at
+# CHECKOUT and do not rewrite files already on disk, and git trusts its stat
+# cache, so those files are never re-read and `git status` stays clean while the
+# bytes stay CRLF -- indefinitely, for any file no later commit happens to
+# touch. Fourteen of them sat like that on the operator's machine.
+#
+# This comment used to say the fix was `git reset --hard`. It is not, and that
+# sentence was one keystroke from repeating FK-16, which is the finding about
+# my telling him to discard his working tree over a line-ending diagnosis I had
+# not verified. The repair is per file and non-destructive:
+#
+#   git ls-files --eol            # i/lf w/crlf is the fault
+#   <delete the file, then git checkout -- it>
+#
+# `git add --renormalize .` does NOT do it: it fixes the index, leaves the
+# working tree CRLF, and makes git report clean. Reproduced, not reasoned.
 #
 # This kit is Python, Markdown and JSON. It has no file that wants CRLF.
 * text=auto eol=lf

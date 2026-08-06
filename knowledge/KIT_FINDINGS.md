@@ -1897,3 +1897,68 @@ of** the glazing, so no rectangle can separate them — a mask keyed on "lit pix
 dark neighbourhood" will read the window showing past his shoulder as a rim on his shoulder.
 That is a limit of the instrument, not a setting, and the next thing to look at is whether
 the blue traces the OUTSIDE of his silhouette or the inside of his outline.
+
+---
+
+## FK-31 · MY CRLF CHECK HAD THE WRONG CAUSE, THE WRONG FIX AND AN UNVERIFIED CONSEQUENCE
+
+**Cost:** none. It would have cost an afternoon and possibly a working tree.
+
+**What happened.** `kit_lint` printed **fourteen** identical paragraphs on the operator's
+machine, each naming one file:
+
+> *contains CRLF. The repo pins LF; a CRLF file here means the working tree was converted
+> after checkout, and every hash manifest that covers it is now wrong. Fix with: `git add
+> --renormalize .`*
+
+His tree was clean. Every substantive claim in that message was wrong.
+
+**1 · The cause.** Nothing converted anything after checkout. `.gitattributes` applies **at
+checkout** and does not rewrite files already on disk. Every file no commit has touched since
+it landed still carries the endings it was checked out with under `core.autocrlf=true`. The
+flagged fourteen are a subset of the nineteen files unchanged since that commit — and the
+committed blobs are LF, confirmed with `git cat-file`, not assumed.
+
+*Why `git status` stays clean through all of it:* git trusts its stat cache. The index's
+recorded size and mtime match those files, so it never re-reads them. `git ls-files --eol`
+does, and prints `i/lf w/crlf` — one command, and it is the only one that settles this.
+
+**2 · The fix.** `git add --renormalize .` fixes the **index**, not the working tree.
+Reproduced in a scratch repo: after running it the file was **still CRLF on disk** and
+`git status` went clean — *worse than doing nothing*, because it makes the symptom invisible
+while changing nothing. The repair that works is deleting the file and checking it out again;
+non-destructive on a clean tree, verified the same way, and it survives a later checkout
+because `eol=lf` beats `core.autocrlf`.
+
+**3 · The consequence.** *"every hash manifest that covers it is now wrong"* — **no manifest
+in this kit covers these files by content.** `SOURCE_SHA256.txt` covers the ORIGIN project's
+scripts, for the staging transfer. `fixtures/manifest.json` is a rule corpus, not hashes of
+source. I published a consequence without checking it, **inside the check written to close
+FK-16, which is the finding about publishing consequences without checking them.** Same
+subject, same failure mode, three commits later.
+
+**4 · And `.gitattributes` said the fix was `git reset --hard`.** In a comment I wrote, in the
+commit that closed FK-16. FK-16 is the finding about telling this operator to discard his
+working tree over a line-ending diagnosis I had not verified. **The document memorialising
+that mistake carried the instruction to repeat it.**
+
+**5 · Volume.** Fourteen paragraphs for one fact about one clone. This file already contains
+the rule — *"A false positive at that volume retires the tool"* — written about a different
+check that reported seventeen. A **true** positive at that volume retires it just as fast,
+because nobody reads the fourteenth paragraph and the thirteen above it say nothing new. Now
+one finding with the file list inside it.
+
+**What the check should have said, and now does:** *nothing is broken by this* — no tool here
+reads bytes that care, and the docstring said so all along. What it costs is that a reading
+taken on one machine no longer describes the other, which is the entire reason the endings
+are pinned. That is worth reporting. It is not worth reporting fourteen times, with a cause
+that is wrong, a remedy that does not remedy, and a consequence nobody verified.
+
+**The transferable rule.** *A check earns its message the same way a finding does.* The
+detection here was correct on its first run and every word explaining it was invented — cause,
+remedy and impact all written from what sounded like it followed. **Detection and explanation
+are separate pieces of work, and passing the first tells you nothing about the second.**
+
+**What is not encoded:** whether a given clone's files were checked out before or after the
+attributes landed. The check reports the state, not the history, and does not guess at it —
+which is the whole difference between this version and the last one.
