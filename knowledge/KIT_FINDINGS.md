@@ -1962,3 +1962,39 @@ are separate pieces of work, and passing the first tells you nothing about the s
 **What is not encoded:** whether a given clone's files were checked out before or after the
 attributes landed. The check reports the state, not the history, and does not guess at it —
 which is the whole difference between this version and the last one.
+
+### FK-31b · and the corrected check was still reporting a third of it
+
+`kit_lint` said **fourteen** files. The operator ran `git ls-files --eol` and got
+**thirty-eight**.
+
+The check ran over `scripts()` — *"everything executable in the kit"*. The twenty-four it
+never looked at were markdown, JSON, the skills, the templates, `.gitignore`, `README.md`,
+`ARCHITECTURE.md`, `CLAUDE.md`, `AGENTS.md`, both plugin manifests.
+
+`scripts()` is the right scope for the checks it was built for — a bare sibling invocation or
+a hard-coded project noun can only occur in code. But **the endings are pinned so a clone is
+byte-identical across platforms**, and that claim is about every file in the repository. I
+reused a helper because it was there, and inherited a scope that was written for a different
+question.
+
+**The direction matters.** Under-reporting made the problem look smaller *and* made it look
+like it belonged to the tools — a code hygiene issue rather than what it is, which is that
+his whole checkout differs from mine. Had he not run the read-only command in step 2 and
+sent the output, the repair would have been declared successful with twenty-four files still
+divergent, and `kit_lint` would have agreed.
+
+Two of the thirty-eight are `tests/SOURCE_SHA256.txt` and `tests/fixtures/manifest.json` —
+**the two manifests I named in the wrong message one commit earlier**, whose own bytes were
+CRLF on his disk the whole time I was writing about them.
+
+**Fix.** A new `text_files()` walks the kit and excludes only the binary extensions, and it
+**reads that extension list out of `.gitattributes`** rather than repeating it — a second copy
+of a list is a second thing to forget. Verified against a reproduction with five CRLF files,
+three of them not scripts, plus a control confirming a CRLF-containing `.png` and `.mp4` are
+correctly skipped.
+
+**The transferable rule.** *A helper's name records the question it was written for.*
+`scripts()` answers "what code do we own", and it was reached for to answer "what bytes do we
+ship". Both are lists of files in the same repo, which is exactly why the substitution is
+invisible — and why the report was wrong by a factor of nearly three while looking complete.

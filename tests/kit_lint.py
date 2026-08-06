@@ -46,6 +46,45 @@ def scripts():
             + sorted((KIT / "hooks").glob("*.py"))
             + sorted((KIT / "tests").glob("*.py"))
             + binfiles)
+def text_files():
+    """Every TRACKED TEXT file in the kit, which is a wider set than scripts().
+
+    FK-31b. The CRLF check ran over scripts() and reported FOURTEEN files. The
+    operator ran `git ls-files --eol` and found THIRTY-EIGHT. The missing
+    twenty-four were markdown, JSON, skills, templates, .gitignore -- every
+    tracked file that is not a Python script.
+
+    scripts() is right for the checks it was built for: a bare sibling
+    invocation or a hard-coded project noun can only occur in code. But the
+    endings are pinned so that A CLONE IS BYTE-IDENTICAL ACROSS PLATFORMS, and
+    that claim is about every file in the repository. Scoping the check to code
+    made the report a third of the truth, in the direction that makes a problem
+    look smaller and look like it belongs to the tools.
+
+    The binary list is READ FROM .gitattributes rather than repeated here, so
+    the check and the pinning cannot drift apart -- a second copy of a list is a
+    second thing to forget.
+    """
+    ga = KIT / ".gitattributes"
+    binary = set()
+    if ga.exists():
+        for line in ga.read_text(encoding="utf-8").splitlines():
+            line = line.split("#")[0].strip()
+            if line.startswith("*.") and "binary" in line:
+                binary.add(line.split()[0][1:].lower())
+    out = []
+    for f in sorted(KIT.rglob("*")):
+        if not f.is_file():
+            continue
+        parts = f.relative_to(KIT).parts
+        if any(x in (".git", "__pycache__", ".pytest_cache") for x in parts):
+            continue
+        if f.suffix.lower() in binary:
+            continue
+        out.append(f)
+    return out
+
+
 FAIL = []
 
 
@@ -431,7 +470,8 @@ elif "eol=lf" not in _ga.read_text(encoding="utf-8"):
 # And why status stays clean while this is true: git trusts its stat cache. The
 # index's recorded mtime and size match those files, so it never re-reads them.
 # `git ls-files --eol` reads them and is the command that settles it.
-_crlf = [f"{f.parent.name}/{f.name}" for f in scripts() if b"\r\n" in f.read_bytes()]
+_crlf = [str(f.relative_to(KIT)).replace("\\", "/")
+         for f in text_files() if b"\r\n" in f.read_bytes()]
 if _crlf:
     fail("crlf-in-working-tree", f"{len(_crlf)} file(s)",
          "carry CRLF on disk while the repo pins LF and the committed blobs ARE LF:\n      "
