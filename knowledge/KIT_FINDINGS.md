@@ -1676,3 +1676,63 @@ forwarded only when an operator names a direction.
 refusal puts its headline **first**, so the operator saw the reasoning with the word REFUSED
 cut off the top. *A truncation tuned to the passing case silently edits the failing one.*
 Whole output on non-zero, tail on zero.
+
+---
+
+## FK-28 · THE NUMBER THAT DECIDED HAD NO PROOF, AND THE TOOL SENT HIM TO A DIFFERENT PICTURE
+
+**Cost:** none, and only because the operator described what he saw instead of answering
+yes. **It came within one message of a redesign of a shot's lighting built on a number
+nobody had ever looked at.**
+
+**What happened.** I asked him to open the rim proofs and say whether the magenta sat on hair
+and shoulder edges or on the brass. He did, carefully, and reported: *ear, hair, a bit of
+face — and magenta on the guard rail and on the brass plate on the counter.*
+
+Both halves of that are true, and the second half is outside the head box, so my question was
+answered: the golden-rim number is on the man.
+
+**But the golden-rim number is not the number that gates.** `measure()` writes
+`<name>_rimmask.png` from `masks()` — and the pair block prints that metric with the label
+**"context only — NOT a gate, see F-28"** three lines above. The verdict comes from
+`rim_chroma()`, a different mask on the same crop, and it wrote **no proof image at all.**
+
+So the tool ended every run it has ever made with *"PASS — now open the proof image"*, and
+the picture it named was of a mask that decides nothing.
+
+**Why this is worse than the fault it repeats.** The tool's own docstring records F-02
+happening inside it once already: the first mask was a skin detector, and only opening the
+proof revealed it. That was a *wrong picture*. This is a *missing picture*, and a missing
+picture is harder to catch, because the operator does exactly what he was told, opens a real
+proof, sees something real, and reports honestly on it. **Every part of the process worked
+except the pointer.**
+
+**The unmeasured risk it left open, which is the reason this is urgent rather than tidy.**
+`rim_chroma` is deliberately colour-agnostic — F-28 says gate the swing, not the warmth — so
+it counts any lit edge on a dark surround. In this film's end frame the head box contains
+bright glazing against dark green mullions and a lake beyond, and the man is small, dark and
+back-to-camera in it. A blue-leaning R−B of **−20.8** is exactly what glazing bars against a
+lake would give, and it is also exactly what cool sky light on his shoulder would give. **The
+two hypotheses are indistinguishable from the numbers, and I had already written a paragraph
+choosing between them.**
+
+**Fix.** `rim_chroma` writes `<name>_rimchroma.png`: lit pixels painted **orange where
+R−B ≥ 0 and blue where R−B < 0**, so the reported mean is visible as colour on the actual
+geometry. Both roads print its path, the pair block says *"open these two, not the _rimmask
+pair"*, and the PASS line names `_rimchroma` explicitly. Two selftest cases: the proof is
+written and named, and it is a **different file** from the golden-rim one — the second
+because the first would pass on a tool that wrote the same picture under two names.
+
+The output also states the head-box area of the lit mask alongside it, with the plain
+sentence that a rim is thin. An area that is not thin is architecture.
+
+**The transferable rule, and it is a sharpening of F-02 rather than a repeat.** *Every gating
+number needs a proof, and the proof must be named by the line that reports the verdict.* Not
+"a proof exists somewhere in the output" — the operator will open the one nearest the number
+he was asked about, and if a tool computes two masks it is the tool's job to say which one
+decided. **A correct measurement, a correct proof of a different measurement, and an honest
+operator are sufficient to produce a confident wrong conclusion.**
+
+**What is still not encoded, and it needs a human:** whether the lit pixels are ON A PERSON.
+No threshold in this file can tell hair from a mullion. The proof can, in one look, which is
+why the tool now insists on the right one.

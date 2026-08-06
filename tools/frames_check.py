@@ -169,8 +169,29 @@ RIM_SWING_MIN = 15.0     # k5-30 -> k6-5 is -23.5. Two start frames differ by 4.
 GATE_DIRECTION = "cooler"
 
 
-def rim_chroma(arr, box):
-    """Lit edges on a dark surround inside `box`, and what colour they are."""
+def rim_chroma(arr, box, proof_name=None):
+    """Lit edges on a dark surround inside `box`, and what colour they are.
+
+    FK-28 — AND THIS ONE HAS A PROOF NOW, BECAUSE IT IS THE NUMBER THAT GATES.
+
+    `measure()` writes `<name>_rimmask.png` and it draws `masks()`: the GOLDEN
+    rim, the metric the pair block itself labels "context only — NOT a gate, see
+    F-28". The number the pair gate actually decides on is this one, and it had
+    no proof image at all. So the tool ended every run with "PASS — now open the
+    proof image", and the picture it sent you to was of a different mask.
+
+    That is F-02 — *a mask that cannot see the thing it is pointed at* — inside
+    the tool written to prevent it, for the second time. The docstring above
+    records the first. The difference is that the first was a wrong mask and
+    this was a missing picture, which is harder to notice, because the operator
+    does what he was told, looks at a real proof, and reports honestly on it.
+
+    What the picture must show, and why it is coloured this way: this mask is
+    COLOUR-AGNOSTIC by design (F-28 — gate the swing, not the warmth), so it
+    will happily count a bright window edge against a dark mullion. Painting
+    warm-leaning and cool-leaning lit pixels differently is the only way to see
+    whether the R-B being reported came off a person or off the architecture.
+    """
     H, W, _ = arr.shape
     x0, y0, x1, y1 = int(box[0]*W), int(box[1]*H), int(box[2]*W), int(box[3]*H)
     p = arr[y0:y1, x0:x1].astype(np.float32)
@@ -179,8 +200,22 @@ def rim_chroma(arr, box):
     lit = (L > nb + 8) & (nb < 95) & (L > 60)
     if lit.sum() < 200:
         return None
-    return dict(area=100*float(lit.mean()), rb=float((R-B)[lit].mean()),
-                lum=float(L[lit].mean()))
+    res = dict(area=100*float(lit.mean()), rb=float((R-B)[lit].mean()),
+               lum=float(L[lit].mean()))
+    if proof_name:
+        PROOFS.mkdir(exist_ok=True)
+        over = (arr * 0.30).astype(np.uint8)
+        sub = over[y0:y1, x0:x1]
+        rb_px = (R - B)
+        sub[lit & (rb_px >= 0)] = (255, 150, 0)      # warm-leaning, counted
+        sub[lit & (rb_px < 0)] = (0, 150, 255)       # cool-leaning, counted
+        over[y0:y1, x0:x1] = sub
+        im = Image.fromarray(over)
+        ImageDraw.Draw(im).rectangle([x0, y0, x1, y1], outline=(60, 255, 60), width=3)
+        out = PROOFS / f"{proof_name}_rimchroma.png"
+        im.save(out)
+        res["proof"] = str(out)
+    return res
 
 
 def masks(arr):
@@ -344,6 +379,18 @@ def selftest():
             ("...and a non-pair run is not refused for a direction it never gates",
              [str(p / "a.png")],
              lambda o, rc: "REFUSED" not in o),
+            # FK-28. The gated mask must write its OWN proof, and the run must
+            # send the operator to it rather than to the golden-rim picture that
+            # decides nothing.
+            ("the gated mask writes a proof, and the run names it",
+             [str(p / "a.png"), str(p / "b.png"), "--pair"],
+             lambda o, rc: "_rimchroma" in o and (p / "proofs" / "a_rimchroma.png").exists()
+                           and (p / "proofs" / "b_rimchroma.png").exists()),
+            ("...and that proof is a DIFFERENT file from the golden-rim one",
+             [str(p / "a.png"), str(p / "b.png"), "--pair"],
+             lambda o, rc: (p / "proofs" / "a_rimmask.png").exists()
+                           and (p / "proofs" / "a_rimmask.png").read_bytes()
+                               != (p / "proofs" / "a_rimchroma.png").read_bytes()),
         ]
         for name, args, want in cases:
             out, rc = run(args)
@@ -405,11 +452,13 @@ def main():
     if a.role and len(rs) == 1:
         g = ROLE_GATES[a.role]
         print(f"\n  role={a.role}: {g['note']}")
-        rc = rim_chroma(np.asarray(Image.open(a.images[0]).convert("RGB")), HEAD_BOX)
+        rc = rim_chroma(np.asarray(Image.open(a.images[0]).convert("RGB")), HEAD_BOX,
+                        proof_name=pathlib.Path(a.images[0]).stem)
         if rc is None:
             fail.append("no lit edge found in the head box at all — is there a person in it?")
         else:
             print(f"    RIM CHROMA   area {rc['area']:.2f}%   R-B {rc['rb']:+.1f}   lum {rc['lum']:.1f}")
+            print(f"    proof: {rc['proof']}   (orange = warm-leaning, blue = cool-leaning)")
             if "rim_rb_min" in g and rc["rb"] < g["rim_rb_min"]:
                 fail.append(f"rim R-B {rc['rb']:+.1f} is below {g['rim_rb_min']:+.1f} — the light "
                             "on him is already cool, so the change has happened before the shot starts")
@@ -431,8 +480,10 @@ def main():
         # The pair is now gated on the SWING IN THE RIM'S COLOUR, not on how much
         # golden light lands on him. See F-28: there is no golden light at the
         # window end of this room, so the old delta could only ever be negative.
-        sc = rim_chroma(np.asarray(Image.open(a.images[0]).convert("RGB")), HEAD_BOX)
-        ec = rim_chroma(np.asarray(Image.open(a.images[1]).convert("RGB")), HEAD_BOX)
+        sc = rim_chroma(np.asarray(Image.open(a.images[0]).convert("RGB")), HEAD_BOX,
+                        proof_name=pathlib.Path(a.images[0]).stem)
+        ec = rim_chroma(np.asarray(Image.open(a.images[1]).convert("RGB")), HEAD_BOX,
+                        proof_name=pathlib.Path(a.images[1]).stem)
         # Name the direction in words, not only as the sign of a threshold. The
         # operator who typed `--expect warmer` read "(need <= -15.0)" and PASS
         # in the same block and had no reason to connect them.
@@ -459,6 +510,18 @@ def main():
               "    (the room swings cool too)")
         print(f"        golden-rim head-box  {s['rim_headbox_pct']:6.2f}%  →  "
               f"{e['rim_headbox_pct']:6.2f}%   (context only — NOT a gate, see F-28)")
+        # FK-28. THE PROOF FOR THE NUMBER THAT DECIDES, named separately from
+        # the _rimmask proof, which draws the metric on the line above it — the
+        # one this block says is not a gate. "Open the proof image" was pointing
+        # at the wrong picture on every run this tool has ever made.
+        print(f"\n        PROOF OF THE GATED MASK — open these two, not the _rimmask pair:")
+        for _c in (sc, ec):
+            print(f"          {_c['proof']}")
+        print(f"        orange = warm-leaning pixel, blue = cool-leaning, and the R-B above is")
+        print(f"        their mean. A rim is THIN: head-box area is {sc['area']:.2f}% and "
+              f"{ec['area']:.2f}% here.")
+        print(f"        If the colour is on glazing bars or brass rather than on hair, a")
+        print(f"        shoulder or a jacket edge, this gate is measuring the room, not the man.")
         swing = ec["rb"] - sc["rb"]
         if swing > -RIM_SWING_MIN:
             fail.append(f"rim colour swing {swing:+.1f} is weaker than {-RIM_SWING_MIN:+.1f}. "
@@ -474,8 +537,15 @@ def main():
         for x in fail:
             print(f"    ! {x}")
         return 1
-    print("\n  \033[92mPASS\033[0m — now open the proof image. "
-          "This tool's first version was wrong and only the proof revealed it.")
+    # FK-28. This line used to say "the proof image", singular, on a run that
+    # writes two DIFFERENT masks — and the operator reasonably opened the one
+    # named in the per-frame block, which draws the metric this tool demotes to
+    # context-only three lines above. Name the one that decided.
+    print("\n  \033[92mPASS\033[0m — now open the \033[1m_rimchroma\033[0m proof, which is the "
+          "mask this\n  verdict was computed from. The _rimmask pair is the golden-rim metric "
+          "and it\n  gates nothing. This tool's first version was wrong about its mask and only "
+          "a\n  proof revealed it; the second version was right about the mask and pointed at "
+          "the\n  wrong picture.")
     return 0
 
 
